@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "dev:network": "vite --host 0.0.0.0",
@@ -12,6 +14,7 @@
     "preview:network": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
