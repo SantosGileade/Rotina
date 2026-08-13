@@ -120,7 +120,7 @@ export default function Home() {
       {!workout && <nav className="bottom-nav">
         {([
           ["resumo", "⌂", "Resumo"], ["hoje", "✓", "Hoje"], ["treino", "↗", "Treino"], ["metas", "◎", "Metas"], ["conquistas", "✦", "Conquistas"],
-        ] as [Screen, string, string][]).map(([id, ico, label]) => <button key={id} onClick={() => navigate(id)} className={screen === id ? "active" : ""}><Icon>{ico}</Icon><small>{label}</small></button>)}
+        ] as [Screen, string, string][]).map(([id, ico, label]) => <button key={id} onClick={() => navigate(id)} className={screen === id ? "active" : ""}>{id === "treino" ? <span className="icon workout-nav-icon">↑</span> : <Icon>{ico}</Icon>}<small>{label}</small></button>)}
       </nav>}
       {exerciseOpen && <ExerciseDetail onClose={() => setExerciseOpen(false)} />}
       {addingTask && <AddTaskModal onClose={() => setAddingTask(false)} onAdd={addTask} />}

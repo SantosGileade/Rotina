@@ -90,6 +90,67 @@ button { touch-action: manipulation; }
 .choice-row.categories button { flex: 0 1 auto; min-width: 76px; }
 .task-form > .primary { margin-top: 5px; }
 
+/* Larger mobile scale: preserves layout while improving readability */
+@media (max-width: 560px) {
+  .app-shell { padding-left: 18px; padding-right: 18px; }
+  .topbar { height: 62px; }
+  .brand { font-size: 22px; }
+  .brand span { width: 31px; height: 31px; }
+  .coin-pill { padding: 10px 14px; font-size: 14px; }
+  .hero-head.compact { padding-top: 13px; padding-bottom: 11px; }
+  .hero-head.compact h1 { font-size: 18px; }
+  .hero-head.compact .eyebrow { font-size: 9px; }
+  .hero-head.compact .couple span { width: 31px; height: 31px; font-size: 11px; }
+
+  .compact-focus { padding: 16px 16px 14px; min-height: 130px; border-radius: 18px; }
+  .compact-focus > small { font-size: 10px; }
+  .compact-focus > b { font-size: 14px; margin-bottom: 15px; }
+  .compact-focus > div { font-size: 10px; margin-bottom: 8px; }
+  .compact-focus .progress { height: 5px; }
+
+  .summary-title { margin-top: 21px; margin-bottom: 11px; }
+  .summary-title h2, .next-title h2 { font-size: 18px; }
+  .home-stats { gap: 9px; }
+  .home-stats .stat-card { min-height: 98px; padding: 14px 15px; border-radius: 15px; }
+  .home-stats .stat-card small { font-size: 10px; }
+  .home-stats .stat-card strong { font-size: 26px; margin-top: 5px; }
+  .home-stats .stat-card em { font-size: 17px; }
+  .home-stats .stat-card > span { font-size: 9px; margin-top: 3px; }
+
+  .next-title { margin-top: 21px; margin-bottom: 11px; }
+  .next-title button { font-size: 13px; }
+  .next-grid { gap: 9px; }
+  .next-mini { min-height: 66px; padding: 12px 13px 11px 17px; border-radius: 13px; }
+  .next-mini b { font-size: 12px; }
+  .next-mini small { font-size: 10px; }
+
+  .week-card { padding: 21px; }
+  .week-card .section-title h2 { font-size: 20px; }
+  .week-row { font-size: 13px; grid-template-columns: 82px 1fr 38px; margin: 16px 0; }
+  .highlight { padding: 16px; }
+  .highlight small { font-size: 12px; }
+
+  .page-head h1, .sheet h1 { font-size: 34px; }
+  .page-head > p:last-child { font-size: 15px; }
+  .today-head h1 { font-size: 29px; }
+  .today-head p { font-size: 13px; }
+  .tasks-focus > .section-title h2 { font-size: 23px; }
+  .task { padding: 16px 14px; min-height: 64px; }
+  .task-copy b { font-size: 15px; }
+  .task-copy small { font-size: 11px; }
+}
+
+.workout-nav-icon { font-family: Arial, sans-serif; font-size: 20px!important; line-height: 1; transform: rotate(45deg); transform-origin: center; }
+
+/* Keep controls closer to the iOS safe-area edge without covering the home indicator. */
+.bottom-nav {
+  height: calc(62px + max(0px, calc(env(safe-area-inset-bottom) - 8px)));
+  padding-top: 4px;
+  padding-bottom: max(4px, calc(env(safe-area-inset-bottom) - 8px));
+  align-items: center;
+}
+.bottom-nav button { padding-top: 2px; padding-bottom: 2px; justify-content: center; }
+
 /* Success feedback and 70% milestone */
 .toast.success { background: #dcfce8; color: #125b35; border: 1px solid #7add9f; box-shadow: 0 12px 45px #0b6f3944; }
 .toast.success span { color: #179553; }
