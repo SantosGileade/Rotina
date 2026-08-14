@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Screen = "resumo" | "hoje" | "treino" | "metas" | "espiritual" | "conquistas";
 type Person = "gileade" | "renata";
@@ -30,10 +30,47 @@ function playCelebrationSound() {
   const AudioCtx = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AudioCtx) return;
   celebrationAudio ??= new AudioCtx(); void celebrationAudio.resume();
-  const now=celebrationAudio.currentTime, gain=celebrationAudio.createGain();
-  gain.gain.setValueAtTime(.0001,now); gain.gain.exponentialRampToValueAtTime(.1,now+.08); gain.gain.exponentialRampToValueAtTime(.0001,now+1.25); gain.connect(celebrationAudio.destination);
-  [440,554,659].forEach((frequency,index)=>{const osc=celebrationAudio!.createOscillator();osc.type="sine";osc.frequency.value=frequency;osc.connect(gain);osc.start(now+index*.08);osc.stop(now+1.3);});
+  const context = celebrationAudio;
+  const now = context.currentTime;
+
+  const wind = context.createBuffer(1, Math.floor(context.sampleRate * 1.8), context.sampleRate);
+  const windData = wind.getChannelData(0);
+  for (let index = 0; index < windData.length; index += 1) windData[index] = Math.random() * 2 - 1;
+  const windSource = context.createBufferSource();
+  const windFilter = context.createBiquadFilter();
+  const windGain = context.createGain();
+  windSource.buffer = wind;
+  windFilter.type = "bandpass";
+  windFilter.frequency.setValueAtTime(520, now);
+  windFilter.frequency.exponentialRampToValueAtTime(1700, now + .85);
+  windFilter.frequency.exponentialRampToValueAtTime(760, now + 1.65);
+  windFilter.Q.value = .7;
+  windGain.gain.setValueAtTime(.0001, now);
+  windGain.gain.exponentialRampToValueAtTime(.075, now + .3);
+  windGain.gain.exponentialRampToValueAtTime(.0001, now + 1.75);
+  windSource.connect(windFilter).connect(windGain).connect(context.destination);
+  windSource.start(now);
+  windSource.stop(now + 1.8);
+
+  [523.25, 659.25, 783.99].forEach((frequency, index) => {
+    const oscillator = context.createOscillator();
+    const noteGain = context.createGain();
+    const start = now + .38 + index * .11;
+    oscillator.type = index === 2 ? "sine" : "triangle";
+    oscillator.frequency.setValueAtTime(frequency, start);
+    oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.035, start + .75);
+    noteGain.gain.setValueAtTime(.0001, start);
+    noteGain.gain.exponentialRampToValueAtTime(.055, start + .08);
+    noteGain.gain.exponentialRampToValueAtTime(.0001, start + 1.05);
+    oscillator.connect(noteGain).connect(context.destination);
+    oscillator.start(start);
+    oscillator.stop(start + 1.1);
+  });
 }
+
+const longDate = (date: Date) => new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long" }).format(date);
+const dayAndMonth = (date: Date) => new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long" }).format(date);
+const weekday = (date: Date) => new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(date);
 
 const exercises = [
   { name: "Supino reto", meta: "4 séries × 12 rep", muscle: "Peito" },
@@ -58,6 +95,7 @@ export default function Home() {
   const [goalValues, setGoalValues] = useState([3, 5, 5, 4]);
   const [addingTask, setAddingTask] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [now, setNow] = useState(() => new Date());
   const [person, setPerson] = useState<Person>(() => (localStorage.getItem("rotina-person") as Person) || "gileade");
   const screenHistory = useRef<Screen[]>(["resumo"]);
   const edgeSwipe = useRef({ active: false, startX: 0, startY: 0 });
@@ -71,7 +109,15 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [rest]);
 
-  const greeting = useMemo(() => new Date().getHours() < 12 ? "Bom dia" : new Date().getHours() < 18 ? "Boa tarde" : "Boa noite", []);
+  useEffect(() => {
+    const refreshClock = () => setNow(new Date());
+    const timer = window.setInterval(refreshClock, 30_000);
+    window.addEventListener("focus", refreshClock);
+    document.addEventListener("visibilitychange", refreshClock);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", refreshClock); document.removeEventListener("visibilitychange", refreshClock); };
+  }, []);
+
+  const greeting = now.getHours() < 12 ? "Bom dia" : now.getHours() < 18 ? "Boa tarde" : "Boa noite";
 
   function reward(amount: number, message = "Boa! Vocês estão avançando") {
     setCoins((v) => v + amount);
@@ -128,9 +174,9 @@ export default function Home() {
       </header>
 
       <section className="content" key={screen}>
-        {screen === "resumo" && <Resumo greeting={greeting} done={done} total={visibleTasks.length} workoutDone={workoutDone} workoutProgress={(series - 1) / 4 * 100} spiritualDone={spiritualDone} goalValues={goalValues} person={person} onGo={navigate} />}
-        {screen === "hoje" && <Hoje tasks={visibleTasks} toggle={toggleTask} remove={(id) => setTasks((current) => current.filter((task) => task.id !== id))} done={done} onAdd={() => setAddingTask(true)} />}
-        {screen === "treino" && !workout && <Treino person={person} onDetail={() => setExerciseOpen(true)} onStart={() => setWorkout(true)} />}
+        {screen === "resumo" && <Resumo now={now} greeting={greeting} done={done} total={visibleTasks.length} workoutDone={workoutDone} workoutProgress={(series - 1) / 4 * 100} spiritualDone={spiritualDone} goalValues={goalValues} person={person} onGo={navigate} />}
+        {screen === "hoje" && <Hoje now={now} tasks={visibleTasks} toggle={toggleTask} remove={(id) => setTasks((current) => current.filter((task) => task.id !== id))} done={done} onAdd={() => setAddingTask(true)} />}
+        {screen === "treino" && !workout && <Treino now={now} person={person} onDetail={() => setExerciseOpen(true)} onStart={() => setWorkout(true)} />}
         {screen === "treino" && workout && <WorkoutMode series={series} rest={rest} onBack={() => setWorkout(false)} onSeries={() => { if (series < 4) { setSeries(series + 1); setRest(60); reward(5, "Série concluída"); } else { reward(80, "Treino concluído!"); setWorkoutDone(true); setWorkout(false); setSeries(1); } }} />}
         {screen === "metas" && <Metas reward={reward} vals={goalValues} setVals={setGoalValues} />}
         {screen === "espiritual" && <Espiritual reward={reward} checked={spiritualDone} setChecked={setSpiritualDone} />}
@@ -150,8 +196,8 @@ export default function Home() {
   );
 }
 
-function Resumo({ greeting, done, total, workoutDone, workoutProgress, spiritualDone, goalValues, person, onGo }: { greeting: string; done: number; total: number; workoutDone: boolean; workoutProgress: number; spiritualDone: boolean; goalValues: number[]; person: Person; onGo: (s: Screen) => void }) {
-  const taskPercent = Math.round(done / total * 100);
+function Resumo({ now, greeting, done, total, workoutDone, workoutProgress, spiritualDone, goalValues, person, onGo }: { now: Date; greeting: string; done: number; total: number; workoutDone: boolean; workoutProgress: number; spiritualDone: boolean; goalValues: number[]; person: Person; onGo: (s: Screen) => void }) {
+  const taskPercent = total ? Math.round(done / total * 100) : 0;
   const trainingPercent = workoutDone ? 100 : Math.round(workoutProgress);
   const spiritualPercent = spiritualDone ? 100 : 0;
   const goalPercent = Math.round(goalValues.reduce((sum, value, index) => sum + (index === 0 ? Math.min(value / 4, 1) : Math.min(value / 7, 1)), 0) / goalValues.length * 100);
@@ -160,22 +206,24 @@ function Resumo({ greeting, done, total, workoutDone, workoutProgress, spiritual
   const dayPercent = Math.round((taskPercent + trainingPercent + spiritualPercent) / 3);
   const [celebrating, setCelebrating] = useState(false);
   const [animatedTaskPercent, setAnimatedTaskPercent] = useState(0);
+  const [focusCollapsed, setFocusCollapsed] = useState(() => localStorage.getItem("rotina-focus-collapsed") === "true");
+  const toggleFocus = () => setFocusCollapsed((collapsed) => { localStorage.setItem("rotina-focus-collapsed", String(!collapsed)); return !collapsed; });
   useEffect(() => {
     const start = window.setTimeout(() => setAnimatedTaskPercent(dayPercent), 120);
     let finish: number | undefined;
-    const lastSeen = Number(localStorage.getItem("rotina-summary-celebration") || 0);
-    if (dayPercent >= 70 && Date.now() - lastSeen > 5 * 60 * 1000) {
-      localStorage.setItem("rotina-summary-celebration", String(Date.now()));
+    const completionKey = `rotina-summary-complete-${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+    if (dayPercent === 100 && localStorage.getItem(completionKey) !== "true") {
+      localStorage.setItem(completionKey, "true");
       const celebrate = window.setTimeout(() => setCelebrating(true), 380);
       const sound = window.setTimeout(playCelebrationSound, 420);
       finish = window.setTimeout(() => setCelebrating(false), 6200);
       return () => { window.clearTimeout(start); window.clearTimeout(celebrate); window.clearTimeout(sound); if(finish) window.clearTimeout(finish); };
     }
     return () => window.clearTimeout(start);
-  }, [dayPercent]);
+  }, [dayPercent, now]);
   return <>
-    <div className="hero-head compact"><div><p className="eyebrow">QUINTA, 13 DE AGOSTO</p><h1>{greeting}, Gileade e Renata <span>♥</span></h1></div><div className="couple"><span>G</span><span>R</span></div></div>
-    <article className={`compact-focus ${celebrating ? "celebrating" : ""}`}><button aria-label="Fechar foco da semana">×</button><small>Foco da semana</small><b>Disciplina hoje, liberdade amanhã.</b><div><span>Progresso geral do dia</span><strong>{dayPercent}%</strong></div><Progress value={animatedTaskPercent} /></article>{celebrating && <Confetti />}
+    <div className="hero-head compact"><div><p className="eyebrow">{longDate(now).toLocaleUpperCase("pt-BR")}</p><h1>{greeting}, Gileade e Renata <span>♥</span></h1></div><div className="couple"><span>G</span><span>R</span></div></div>
+    <article className={`compact-focus ${focusCollapsed ? "collapsed" : ""} ${celebrating ? "celebrating" : ""}`}><button className="focus-toggle" onClick={toggleFocus} aria-label={focusCollapsed ? "Expandir foco da semana" : "Minimizar foco da semana"} aria-expanded={!focusCollapsed}><i /></button><div className="focus-copy"><small>Foco da semana</small><b>Disciplina hoje, liberdade amanhã.</b></div><div className="focus-progress-row"><span>Progresso geral do dia</span><strong>{dayPercent}%</strong></div><Progress value={animatedTaskPercent} /></article>{celebrating && <Confetti />}
     <div className="section-title summary-title"><h2>Resumo do dia</h2></div>
     <div className="stats-grid home-stats">
       <button onClick={() => onGo("hoje")} className="stat-card"><small>Afazeres</small><strong>{done}<em>/{total}</em></strong><span>concluídos</span></button>
@@ -191,8 +239,9 @@ function Resumo({ greeting, done, total, workoutDone, workoutProgress, spiritual
   </>;
 }
 
-function Hoje({ tasks, toggle, remove, done, onAdd }: { tasks: typeof tasksSeed; toggle: (n: number) => void; remove: (n:number)=>void; done: number; onAdd:()=>void }) {
+function Hoje({ now, tasks, toggle, remove, done, onAdd }: { now: Date; tasks: typeof tasksSeed; toggle: (n: number) => void; remove: (n:number)=>void; done: number; onAdd:()=>void }) {
   const percent = tasks.length ? Math.round(done/tasks.length*100) : 0;
+  const calendarDays = Array.from({ length: 7 }, (_, index) => { const date = new Date(now); date.setHours(12, 0, 0, 0); date.setDate(date.getDate() + index - 3); return date; });
   const previousPercent = useRef(percent);
   const [celebrating,setCelebrating] = useState(false);
   useEffect(()=>{
@@ -200,7 +249,7 @@ function Hoje({ tasks, toggle, remove, done, onAdd }: { tasks: typeof tasksSeed;
     previousPercent.current = percent;
     if(crossed){ playCelebrationSound(); setCelebrating(true); const timer=window.setTimeout(()=>setCelebrating(false),6200); return ()=>window.clearTimeout(timer); }
   },[percent]);
-  return <><div className="today-head"><h1>Hoje</h1><p>13 de agosto, quinta-feira</p></div><div className="calendar-strip">{[["S","10"],["T","11"],["Q","12"],["Q","13"],["S","14"],["S","15"],["D","16"]].map(([d,n],i) => <button className={i===3?"selected":""} key={n}><small>{d}</small><b>{n}</b>{i===3&&<i/>}</button>)}</div><div className="tasks-focus"><div className="section-title"><div><p>ATIVIDADES DE HOJE</p><h2>Afazeres do dia</h2></div><button onClick={onAdd}>＋ Adicionar</button></div><div className={`daily-progress milestone-progress ${celebrating?"celebrating":""}`}><div><span>Progresso do dia</span><b>{done} de {tasks.length} · {percent}%</b></div><Progress value={percent} color="green" /></div><div className="task-list">{tasks.map(t => <SwipeTask key={t.id} task={t} onToggle={()=>toggle(t.id)} onDelete={()=>remove(t.id)} />)}</div></div>{celebrating&&<Confetti/>}</>;
+  return <><div className="today-head"><h1>Hoje</h1><p>{dayAndMonth(now)}, {weekday(now)}</p></div><div className="calendar-strip">{calendarDays.map((date,index) => <button className={index===3?"selected":""} key={date.toISOString()}><small>{new Intl.DateTimeFormat("pt-BR", { weekday: "narrow" }).format(date).toLocaleUpperCase("pt-BR")}</small><b>{date.getDate()}</b>{index===3&&<i/>}</button>)}</div><div className="tasks-focus"><div className="section-title"><div><p>ATIVIDADES DE HOJE</p><h2>Afazeres do dia</h2></div><button onClick={onAdd}>＋ Adicionar</button></div><div className={`daily-progress milestone-progress ${celebrating?"celebrating":""}`}><div><span>Progresso do dia</span><b>{done} de {tasks.length} · {percent}%</b></div><Progress value={percent} color="green" /></div><div className="task-list">{tasks.map(t => <SwipeTask key={t.id} task={t} onToggle={()=>toggle(t.id)} onDelete={()=>remove(t.id)} />)}</div></div>{celebrating&&<Confetti/>}</>;
 }
 
 function SwipeTask({ task, onToggle, onDelete }: { task: typeof tasksSeed[number]; onToggle:()=>void; onDelete:()=>void }) {
@@ -219,8 +268,8 @@ function AddTaskModal({ onClose, onAdd }: { onClose:()=>void; onAdd:(task:{title
   return <div className="modal"><form className="sheet task-form" onSubmit={(e)=>{e.preventDefault();if(title.trim())onAdd({title:title.trim(),level,tag,time});}}><button type="button" className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">NOVA ATIVIDADE</p><h1>Adicionar afazer</h1><label>Nome da atividade<input required value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex.: Organizar a cozinha" /></label><label>Horário <small>(opcional)</small><input type="time" value={time} onChange={e=>setTime(e.target.value)} /></label><fieldset><legend>Dificuldade</legend><div className="choice-row">{["Fácil","Médio","Difícil"].map(item=><button type="button" key={item} className={level===item?"selected":""} onClick={()=>setLevel(item)}>{item}</button>)}</div></fieldset><fieldset><legend>Categoria</legend><div className="choice-row categories">{["Casa","Juntos","Pessoal","Estudo","Saúde"].map(item=><button type="button" key={item} className={tag===item?"selected":""} onClick={()=>setTag(item)}>{item}</button>)}</div></fieldset><button className="primary" type="submit">Adicionar atividade</button></form></div>;
 }
 
-function Treino({ person, onDetail, onStart }: { person:Person; onDetail:()=>void; onStart:()=>void }) {
-  return <><div className="page-head"><p className="eyebrow">QUINTA-FEIRA</p><h1>Treino de {person === "gileade" ? "Gileade" : "Renata"}</h1><p>Hoje é dia de superar a última versão.</p></div><article className="workout-hero"><div className="workout-art has-image"><img src={`${import.meta.env.BASE_URL}rotina-casal.png`} alt="Casal construindo sua rotina de treino" /><span>PEITO + TRÍCEPS</span></div><div className="workout-copy"><p>TREINO A</p><h2>Força & constância</h2><div className="workout-meta"><span>◉ 6 exercícios</span><span>◷ 60 min</span><span>✦ +80</span></div><button className="primary" onClick={onStart}>Iniciar treino <span>→</span></button></div></article><div className="section-title"><h2>Exercícios</h2><button>Editar</button></div><div className="exercise-list">{exercises.map((e,i)=><button key={e.name} onClick={i===0?onDetail:undefined}><span className="exercise-num">{String(i+1).padStart(2,"0")}</span><span><b>{e.name}</b><small>{e.meta} · {e.muscle}</small></span><em>›</em></button>)}</div><section className="group-classes" id="aulas-coletivas"><div className="section-title"><div><p>AGENDA DA ACADEMIA</p><h2>Aulas coletivas</h2></div></div><div className="class-calendar">{groupClasses[person].map((item,index)=><article key={item.name} className={index===0?"next-class":""}><span>{item.day}</span><div><b>{item.name}</b><small>{item.time}</small></div></article>)}</div></section></>;
+function Treino({ now, person, onDetail, onStart }: { now:Date; person:Person; onDetail:()=>void; onStart:()=>void }) {
+  return <><div className="page-head"><p className="eyebrow">{weekday(now).toLocaleUpperCase("pt-BR")}</p><h1>Treino de {person === "gileade" ? "Gileade" : "Renata"}</h1><p>Hoje é dia de superar a última versão.</p></div><article className="workout-hero"><div className="workout-art has-image"><img src={`${import.meta.env.BASE_URL}rotina-casal.png`} alt="Casal construindo sua rotina de treino" /><span>PEITO + TRÍCEPS</span></div><div className="workout-copy"><p>TREINO A</p><h2>Força & constância</h2><div className="workout-meta"><span>◉ 6 exercícios</span><span>◷ 60 min</span><span>✦ +80</span></div><button className="primary" onClick={onStart}>Iniciar treino <span>→</span></button></div></article><div className="section-title"><h2>Exercícios</h2><button>Editar</button></div><div className="exercise-list">{exercises.map((e,i)=><button key={e.name} onClick={i===0?onDetail:undefined}><span className="exercise-num">{String(i+1).padStart(2,"0")}</span><span><b>{e.name}</b><small>{e.meta} · {e.muscle}</small></span><em>›</em></button>)}</div><section className="group-classes" id="aulas-coletivas"><div className="section-title"><div><p>AGENDA DA ACADEMIA</p><h2>Aulas coletivas</h2></div></div><div className="class-calendar">{groupClasses[person].map((item,index)=><article key={item.name} className={index===0?"next-class":""}><span>{item.day}</span><div><b>{item.name}</b><small>{item.time}</small></div></article>)}</div></section></>;
 }
 
 function PersonMenu({ person, onSelect, onClose }: { person:Person; onSelect:(person:Person)=>void; onClose:()=>void }) {
