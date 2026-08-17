@@ -417,11 +417,34 @@ function PersonMenu({ person, onSelect, onClose }: { person:Person; onSelect:(pe
 
 function ExerciseDetail({ onClose }: { onClose:()=>void }) { const [tab,setTab]=useState("Como fazer"); return <div className="modal"><div className="sheet"><button className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">EXERCÍCIO 01</p><h1>Supino reto</h1><div className="exercise-visual"><div className="bench">●━━━━●<br/><span>╱▰╲</span></div><button>▶</button><small>Veja a execução</small></div><div className="tabs">{["Como fazer","Músculos","Dicas"].map(t=><button onClick={()=>setTab(t)} className={tab===t?"active":""} key={t}>{t}</button>)}</div><p className="description">{tab==="Como fazer"?"Deite no banco, mantenha os pés firmes e desça a barra de forma controlada até a linha do peito.":tab==="Músculos"?"Peitoral maior, tríceps e deltoide anterior.":"Mantenha as escápulas encaixadas e evite tirar o quadril do banco."}</p><div className="detail-grid"><div><small>Séries</small><b>4</b></div><div><small>Repetições</small><b>10–12</b></div><div><small>Descanso</small><b>60 seg</b></div><div><small>Carga</small><b>20 kg</b></div></div></div></div> }
 
+const exerciseGuides = [
+  { names:["supino inclinado"], image:"supino-inclinado.jpg", tip:"Banco inclinado, pés firmes e barra descendo na parte alta do peito." },
+  { names:["supino na maquina","supino maquina"], image:"supino-maquina.jpg", tip:"Ajuste o banco na altura do peito e empurre sem tirar as costas do apoio." },
+  { names:["supino reto"], image:"supino-reto.jpg", tip:"Pés firmes, escápulas apoiadas e barra descendo na linha do peito." },
+  { names:["crucifixo na maquina","crucifixo maquina","peck deck","pec deck"], image:"crucifixo-maquina.jpg", tip:"Cotovelos levemente flexionados; feche os braços sem projetar os ombros." },
+  { names:["crossover"], image:"crossover.jpg", tip:"Incline pouco o tronco e una as mãos à frente mantendo os cotovelos suaves." },
+  { names:["flexao de braco","flexao"], image:"flexao.jpg", tip:"Corpo alinhado; desça o peito entre as mãos sem deixar o quadril cair." },
+  { names:["triceps pulley com corda","triceps corda"], image:"triceps-corda.jpg", tip:"Cotovelos presos ao corpo; estenda e afaste as pontas da corda no final." },
+  { names:["triceps pulley com barra","triceps barra"], image:"triceps-barra.jpg", tip:"Cotovelos imóveis ao lado do tronco; empurre a barra até estender os braços." },
+  { names:["triceps frances"], image:"triceps-frances.jpg", tip:"Mantenha os cotovelos apontados para frente e estenda o peso sobre a cabeça." },
+  { names:["triceps testa"], image:"triceps-testa.jpg", tip:"Deitado, mantenha os braços firmes e leve a barra com controle perto da testa." },
+  { names:["puxada frontal"], image:"puxada-frontal.jpg", tip:"Peito aberto; puxe a barra até a parte alta do peito sem balançar o tronco." },
+  { names:["remada baixa"], image:"remada-baixa.jpg", tip:"Coluna neutra; puxe a alça em direção ao abdômen aproximando as escápulas." },
+  { names:["remada unilateral com halter","remada unilateral"], image:"remada-unilateral.jpg", tip:"Apoie mão e joelho no banco e puxe o halter em direção ao quadril." },
+  { names:["pulldown na polia","pulldown polia"], image:"pulldown-polia.jpg", tip:"Braços quase estendidos; leve a barra até as coxas usando as costas." },
+  { names:["rosca direta"], image:"rosca-direta.jpg", tip:"Cotovelos junto ao corpo; eleve a barra sem impulsionar o tronco." },
+  { names:["rosca martelo"], image:"rosca-martelo.jpg", tip:"Palmas voltadas uma para a outra e cotovelos parados durante a subida." },
+  { names:["rosca alternada com halteres","rosca alternada"], image:"rosca-alternada.jpg", tip:"Suba um halter de cada vez sem girar ou inclinar o tronco." },
+];
+const normalizeExerciseName=(value:string)=>value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+function getExerciseGuide(name:string){const normalized=normalizeExerciseName(name);return exerciseGuides.find(item=>item.names.some(alias=>normalized.includes(alias)));}
+
 function WorkoutMode({ plan, activeExercise, completed, series, rest, ready, onSeries, onRestDone, onChoose, onWeight }: { plan:WorkoutDay; activeExercise:number; completed:string[]; series:number; rest:number; ready:boolean; onSeries:()=>void; onRestDone:()=>void; onChoose:(index:number)=>void; onWeight:(amount:number)=>void }) {
   const exercise = plan.exercises[activeExercise];
+  const guide = getExerciseGuide(exercise.name);
   const completedCount = completed.length;
   const finalAction=ready;
-  return <div className="workout-mode"><div className="mode-top"><span>EXERCÍCIO {activeExercise+1} DE {plan.exercises.length}</span><b>{completedCount}/{plan.exercises.length} feitos</b></div><Progress value={completedCount/plan.exercises.length*100}/><div className="mode-center"><div className="exercise-orb"><span>Imagem<br/>do aparelho</span></div><p className="series-indicator">SÉRIE <strong>{series}</strong> DE {exercise.sets}</p><h1>{exercise.name}</h1><div className="rep-number">{exercise.reps}<small>{exercise.reps.includes("min")||exercise.reps.includes("seg")?"duração":"repetições"}</small></div><div className="load-control"><button onClick={()=>onWeight(-1)} aria-label="Diminuir carga">−</button><div><b>{exercise.weight}</b><small>{exercise.weight ? "kg de cada lado" : "sem carga"}</small></div><button onClick={()=>onWeight(1)} aria-label="Aumentar carga">＋</button></div>{rest>0&&<div className="rest active-rest"><span>Descanso</span><b>00:{String(rest).padStart(2,"0")}</b></div>}</div><div className="exercise-order"><small>TROCAR ORDEM</small><div>{plan.exercises.map((item,index)=><button key={item.id} disabled={completed.includes(item.id)} className={index===activeExercise?"active":""} onClick={()=>onChoose(index)}><span>{completed.includes(item.id)?"✓":index+1}</span>{item.name}</button>)}</div></div><button className={`primary fixed-action ${finalAction?"finish-action":"series-action"}`} onClick={rest>0?onRestDone:onSeries}>{rest>0?`Iniciar série ${series}`:ready ? (completedCount===plan.exercises.length-1?"Finalizar treino":"Finalizar exercício") : series===exercise.sets?"Concluir última série":"Concluir série"}</button></div>;
+  return <div className="workout-mode"><div className="mode-top"><span>EXERCÍCIO {activeExercise+1} DE {plan.exercises.length}</span><b>{completedCount}/{plan.exercises.length} feitos</b></div><Progress value={completedCount/plan.exercises.length*100}/><div className="mode-center"><div className={`exercise-orb ${guide?"has-guide":""}`}>{guide?<img src={`${import.meta.env.BASE_URL}exercises/${guide.image}`} alt={`Demonstração de ${exercise.name}`}/>:<span>Imagem ainda<br/>não disponível</span>}</div>{guide&&<p className="exercise-quick-tip">{guide.tip}</p>}<p className="series-indicator">SÉRIE <strong>{series}</strong> DE {exercise.sets}</p><h1>{exercise.name}</h1><div className="rep-number">{exercise.reps}<small>{exercise.reps.includes("min")||exercise.reps.includes("seg")?"duração":"repetições"}</small></div><div className="load-control"><button onClick={()=>onWeight(-1)} aria-label="Diminuir carga">−</button><div><b>{exercise.weight}</b><small>{exercise.weight ? "kg de cada lado" : "sem carga"}</small></div><button onClick={()=>onWeight(1)} aria-label="Aumentar carga">＋</button></div>{rest>0&&<div className="rest active-rest"><span>Descanso</span><b>00:{String(rest).padStart(2,"0")}</b></div>}</div><div className="exercise-order"><small>TROCAR ORDEM</small><div>{plan.exercises.map((item,index)=><button key={item.id} disabled={completed.includes(item.id)} className={index===activeExercise?"active":""} onClick={()=>onChoose(index)}><span>{completed.includes(item.id)?"✓":index+1}</span>{item.name}</button>)}</div></div><button className={`primary fixed-action ${finalAction?"finish-action":"series-action"}`} onClick={rest>0?onRestDone:onSeries}>{rest>0?`Iniciar série ${series}`:ready ? (completedCount===plan.exercises.length-1?"Finalizar treino":"Finalizar exercício") : series===exercise.sets?"Concluir última série":"Concluir série"}</button></div>;
 }
 
 function parseWorkoutPrompt(text: string, current: WeeklyPlan): WeeklyPlan {
@@ -439,7 +462,7 @@ function parseWorkoutPrompt(text: string, current: WeeklyPlan): WeeklyPlan {
     }
     if (activeDay === null) return;
     const cleaned = line.replace(/^[-•*\d.)\s]+/,"").trim();
-    const match = cleaned.match(/^(.+?)\s*[-–:]\s*(\d+)\s*[xX×]\s*([\d–-]+(?:\s*(?:rep|reps|min|seg))?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?)\s*kg)?$/i);
+    const match = cleaned.match(/^(.+?)\s*[-–:]\s*(\d+)\s*[xX×]\s*(.+?)(?:\s+[-–]\s+(\d+(?:[.,]\d+)?)\s*kg)?$/i);
     if (!match) return;
     const name = match[1].trim();
     const sets = Number(match[2]);

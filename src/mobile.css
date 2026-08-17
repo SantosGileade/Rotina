@@ -262,7 +262,10 @@ button { touch-action: manipulation; }
 .workout-mode .mode-top { margin:4px 0 8px; }
 .workout-mode .mode-center { padding-top:20px; }
 .workout-mode .exercise-orb { width:132px; height:132px; margin-bottom:18px; }
+.exercise-orb.has-guide { overflow:hidden; border:1px solid #ffffff1f; background:#11131a; box-shadow:0 0 55px #8054dc32; }
+.exercise-orb.has-guide img { width:100%; height:100%; display:block; object-fit:cover; }
 .exercise-orb span { color:#777d88; font-size:10px; line-height:1.35; text-align:center; }
+.exercise-quick-tip { max-width:330px; margin:-7px auto 15px!important; color:#aeb2bd!important; font-size:11px!important; line-height:1.45; letter-spacing:0!important; }
 .series-indicator { display:flex; justify-content:center; align-items:baseline; gap:5px; font-size:12px!important; }
 .series-indicator strong { font-size:27px; color:#c7afff; line-height:1; }
 .workout-mode .mode-center h1 { font-size:25px; margin:8px 0 0; }
