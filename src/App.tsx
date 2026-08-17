@@ -99,10 +99,8 @@ function nextGroupClass(classes:GroupClass[], now:Date) {
 }
 
 export default function Home() {
-  const [databaseState,setDatabaseState]=useState<"loading"|"pairing"|"ready"|"error">("loading");
+  const [databaseState,setDatabaseState]=useState<"loading"|"ready"|"error">("loading");
   const [databaseError,setDatabaseError]=useState("");
-  const [pairingCode,setPairingCode]=useState("");
-  const [pairingBusy,setPairingBusy]=useState(false);
   const [householdId,setHouseholdId]=useState("");
   const [databaseUserId,setDatabaseUserId]=useState("");
   const [screen, setScreen] = useState<Screen>("resumo");
@@ -153,7 +151,7 @@ export default function Home() {
   const saveWeeklyPlan = (next: WeeklyPlan) => { const all={...weeklyPlans,[person]:next};setWeeklyPlans(all);localStorage.setItem("rotina-weekly-plans",JSON.stringify(all));if(householdId)void saveWorkoutPlan(householdId,person,next).catch(error=>showDatabaseError(error)); };
   const saveGroupSchedule = (next: GroupSchedule) => { setGroupSchedule(next); localStorage.setItem("rotina-group-classes", JSON.stringify(next));if(householdId)void saveClasses(householdId,person,next[person]).catch(error=>showDatabaseError(error)); };
 
-  function showDatabaseError(error:unknown){const message=error instanceof Error?error.message:"Não foi possível sincronizar com o Supabase.";setToast(`Erro: ${message}`);window.setTimeout(()=>setToast(""),4200);}
+  function showDatabaseError(error:unknown){const message=error instanceof Error?error.message:typeof error==="object"&&error!==null&&"message" in error?String(error.message):"Não foi possível sincronizar com o Supabase.";setToast(`Erro: ${message}`);window.setTimeout(()=>setToast(""),4200);}
 
   async function hydrate(household:string){
     const data=await loadRotina(household);
@@ -173,7 +171,7 @@ export default function Home() {
     setDatabaseState("ready");
   }
 
-  useEffect(()=>{void(async()=>{try{if(!supabaseConfigured)throw new Error("As variáveis do Supabase não foram configuradas.");const user=await ensureAnonymousSession();setDatabaseUserId(user.id);const household=await currentHousehold();if(!household){setDatabaseState("pairing");return;}setHouseholdId(household);await hydrate(household);}catch(error){setDatabaseError(error instanceof Error?error.message:"Falha ao conectar ao Supabase.");setDatabaseState("error");}})();},[]);
+  useEffect(()=>{void(async()=>{try{if(!supabaseConfigured)throw new Error("As variáveis do Supabase não foram configuradas.");const user=await ensureAnonymousSession();setDatabaseUserId(user.id);const existingHousehold=await currentHousehold();const household=existingHousehold||await pairHousehold("rotina-gileade-renata-2026");setHouseholdId(household);await hydrate(household);}catch(error){const message=error instanceof Error?error.message:typeof error==="object"&&error!==null&&"message" in error?String(error.message):"Falha ao conectar ao Supabase.";setDatabaseError(message);setDatabaseState("error");}})();},[]);
   useEffect(()=>{if(databaseState!=="ready"||!householdId)return;const refresh=()=>{if(document.visibilityState==="visible")void hydrate(householdId).catch(showDatabaseError);};window.addEventListener("focus",refresh);document.addEventListener("visibilitychange",refresh);return()=>{window.removeEventListener("focus",refresh);document.removeEventListener("visibilitychange",refresh);};},[databaseState,householdId]);
 
   useEffect(() => {
@@ -277,9 +275,7 @@ export default function Home() {
     try{const assignment=task.tag==="Juntos"?"both":person;const row=await insertTask(householdId,databaseUserId,{title:task.title,category:task.tag,difficulty:task.level==="Difícil"?"hard":task.level==="Médio"?"medium":"easy",coin_reward:coinMap[task.level]||5,assignment,task_time:task.time||null});setTasks(current=>[...current,{id:row.id,...task,coins:coinMap[task.level]||5,done:false,person:assignment}]);setAddingTask(false);setToast("Atividade adicionada");window.setTimeout(()=>setToast(""),2200);}catch(error){showDatabaseError(error);}
   };
 
-  const connectHousehold=async()=>{if(pairingCode.trim().length<6)return;setPairingBusy(true);setDatabaseError("");try{const household=await pairHousehold(pairingCode);setHouseholdId(household);await hydrate(household);}catch(error){setDatabaseError(error instanceof Error?error.message:"Código inválido ou falha de conexão.");}finally{setPairingBusy(false);}};
-
-  if(databaseState!=="ready")return <DatabaseGate state={databaseState} code={pairingCode} setCode={setPairingCode} busy={pairingBusy} error={databaseError} onConnect={connectHousehold}/>;
+  if(databaseState!=="ready")return <DatabaseGate state={databaseState} error={databaseError}/>;
 
   return (
     <main className={`app-shell ${swipeOffset>0?"edge-moving":""} ${swipeDragging?"edge-dragging":""}`} style={{"--edge-swipe":`${swipeOffset}px`} as React.CSSProperties} onPointerDown={startEdgeSwipe} onPointerMove={moveEdgeSwipe} onPointerUp={endEdgeSwipe} onPointerCancel={endEdgeSwipe}>
@@ -315,10 +311,10 @@ export default function Home() {
   );
 }
 
-function DatabaseGate({state,code,setCode,busy,error,onConnect}:{state:"loading"|"pairing"|"ready"|"error";code:string;setCode:(value:string)=>void;busy:boolean;error:string;onConnect:()=>void}){
+function DatabaseGate({state,error}:{state:"loading"|"ready"|"error";error:string}){
   if(state==="loading")return <main className="database-gate"><div className="database-loader"/><h1>Preparando a Rotina</h1><p>Conectando seus dados com segurança.</p></main>;
   if(state==="error"&&error.toLocaleLowerCase("pt-BR").includes("anonymous"))return <main className="database-gate"><span className="gate-icon">!</span><h1>Ative o acesso anônimo</h1><p>No Supabase, abra Authentication → Providers → Anonymous Sign-Ins e ative a opção. Depois atualize o aplicativo.</p></main>;
-  return <main className="database-gate"><span className="gate-brand">R</span><p className="eyebrow">PRIMEIRO ACESSO</p><h1>Conectar ao casal</h1><p>Escolha um código com pelo menos 6 caracteres. Use exatamente o mesmo código no outro celular.</p><input type="password" autoComplete="off" value={code} onChange={event=>setCode(event.target.value)} placeholder="Código do casal"/><button className="primary" disabled={busy||code.trim().length<6} onClick={onConnect}>{busy?"Conectando...":"Conectar aplicativo"}</button>{error&&<small>{error}</small>}<em>Esse código não é uma conta e será solicitado somente uma vez por aparelho.</em></main>;
+  return <main className="database-gate"><span className="gate-icon">!</span><h1>Não foi possível conectar</h1><p>{error||"Atualize o aplicativo e tente novamente."}</p></main>;
 }
 
 function Resumo({ now, greeting, done, total, workoutDone, workoutProgress, spiritualDone, goalValues, person, classes, celebrateRequested, onCelebrated, onGo }: { now: Date; greeting: string; done: number; total: number; workoutDone: boolean; workoutProgress: number; spiritualDone: boolean; goalValues: number[]; person: Person; classes:GroupClass[]; celebrateRequested:boolean; onCelebrated:()=>void; onGo: (s: Screen) => void }) {

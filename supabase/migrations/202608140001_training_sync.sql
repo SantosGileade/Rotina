@@ -77,12 +77,12 @@ begin
   if selected_household is not null then return selected_household; end if;
 
   select household_id into selected_household from public.household_access
-  where access_code_hash = public.crypt(access_code, access_code_hash) limit 1;
+  where access_code_hash = extensions.crypt(access_code, access_code_hash) limit 1;
 
   if selected_household is null then
     if exists (select 1 from public.households) then raise exception 'Código do casal inválido'; end if;
     insert into public.households(name, created_by) values ('Gileade e Renata', (select auth.uid())) returning id into selected_household;
-    insert into public.household_access(household_id, access_code_hash) values (selected_household, public.crypt(access_code, public.gen_salt('bf')));
+    insert into public.household_access(household_id, access_code_hash) values (selected_household, extensions.crypt(access_code, extensions.gen_salt('bf')));
     insert into public.household_members(household_id, user_id, role) values (selected_household, (select auth.uid()), 'owner');
   else
     insert into public.household_members(household_id, user_id, role) values (selected_household, (select auth.uid()), 'member') on conflict do nothing;

@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+// Estes valores são públicos no cliente web. O acesso aos dados continua protegido pelo RLS.
+const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || "https://gxestbjokiwvixowtiaz.supabase.co";
+const publishableKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) || "sb_publishable_iZUIzbsLx6hIwvcShD-fBQ_GKKBypzP";
 
 export const supabaseConfigured = Boolean(url && publishableKey);
 export const supabase = createClient(url || "https://invalid.supabase.co", publishableKey || "missing", {
