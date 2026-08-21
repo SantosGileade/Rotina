@@ -273,12 +273,15 @@ export default function Home() {
     if (exerciseOpen) return setExerciseOpen(false);
     if (workout) return setWorkout(false);
     if (addingTask) return setAddingTask(false);
+    if (editingWorkout !== null) return setEditingWorkout(null);
+    if (editingClasses) return setEditingClasses(false);
+    if (menuOpen) return setMenuOpen(false);
     if (screenHistory.current.length > 1) screenHistory.current.pop();
     navigate(screenHistory.current.at(-1) || "resumo", true);
   };
 
   const startEdgeSwipe = (event: React.PointerEvent) => {
-    const canGoBack=screenHistory.current.length>1||exerciseOpen||workout||addingTask;
+    const canGoBack=screenHistory.current.length>1||exerciseOpen||workout||addingTask||editingWorkout!==null||editingClasses||menuOpen;
     edgeSwipe.current = { active: canGoBack&&event.clientX <= 24, startX: event.clientX, startY: event.clientY };
     if(edgeSwipe.current.active)setSwipeDragging(true);
   };
@@ -407,7 +410,7 @@ function SwipeTask({ task, onToggle, onDelete }: { task: typeof tasksSeed[number
 
 function AddTaskModal({ onClose, onAdd }: { onClose:()=>void; onAdd:(task:{title:string;level:string;tag:string;time:string;recurring:boolean})=>void }) {
   const [title,setTitle]=useState(""); const [level,setLevel]=useState("Fácil"); const [tag,setTag]=useState("Casa"); const [time,setTime]=useState(""); const [recurring,setRecurring]=useState(false);
-  return <div className="modal"><form className="sheet task-form" onSubmit={(e)=>{e.preventDefault();if(title.trim())onAdd({title:title.trim(),level,tag,time,recurring});}}><button type="button" className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">NOVA ATIVIDADE</p><h1>Adicionar afazer</h1><label>Nome da atividade<input required value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex.: Organizar a cozinha" /></label><label>Horário <small>(opcional)</small><input type="time" value={time} onChange={e=>setTime(e.target.value)} /></label><fieldset><legend>Dificuldade</legend><div className="choice-row">{["Fácil","Médio","Difícil"].map(item=><button type="button" key={item} className={level===item?"selected":""} onClick={()=>setLevel(item)}>{item}</button>)}</div></fieldset><fieldset><legend>Categoria</legend><div className="choice-row categories">{["Casa","Juntos","Pessoal","Estudo","Saúde"].map(item=><button type="button" key={item} className={tag===item?"selected":""} onClick={()=>setTag(item)}>{item}</button>)}</div></fieldset><label className="recurring-toggle"><input type="checkbox" checked={recurring} onChange={e=>setRecurring(e.target.checked)} /><span><b>Repetir todos os dias</b><small>Aparece diariamente. Excluir num dia some só naquele dia.</small></span></label><button className="primary" type="submit">Adicionar atividade</button></form></div>;
+  return <div className="modal"><form className="sheet task-form" onSubmit={(e)=>{e.preventDefault();if(title.trim())onAdd({title:title.trim(),level,tag,time,recurring});}}><button type="button" className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">NOVA ATIVIDADE</p><h1>Adicionar afazer</h1><label>Nome da atividade<input required value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex.: Organizar a cozinha" /></label><label>Horário <small>(opcional)</small><input type="time" value={time} onChange={e=>setTime(e.target.value)} /></label><fieldset><legend>Dificuldade</legend><div className="choice-row">{["Fácil","Médio","Difícil"].map(item=><button type="button" key={item} className={level===item?"selected":""} onClick={()=>setLevel(item)}>{item}</button>)}</div></fieldset><fieldset><legend>Categoria</legend><div className="choice-row categories">{["Casa","Juntos","Pessoal","Estudo","Saúde"].map(item=><button type="button" key={item} className={tag===item?"selected":""} onClick={()=>setTag(item)}>{item}</button>)}</div></fieldset><label className="recurring-toggle"><input type="checkbox" checked={recurring} onChange={e=>setRecurring(e.target.checked)} /><span className="toggle-track"><span className="toggle-thumb"/></span><span className="recurring-copy"><b>Repetir todos os dias</b><small>Aparece diariamente. Excluir num dia some só naquele dia.</small></span></label><button className="primary" type="submit">Adicionar atividade</button></form></div>;
 }
 
 function Treino({ now, person, plan, classes, selectedDay, workoutDone, trainedDays, onSelectDay, onDetail, onStart, onEdit, onEditClasses }: { now:Date; person:Person; plan:WeeklyPlan; classes:GroupClass[]; selectedDay:number; workoutDone:boolean; trainedDays:number[]; onSelectDay:(day:number)=>void; onDetail:()=>void; onStart:(day:number)=>void; onEdit:()=>void; onEditClasses:()=>void }) {

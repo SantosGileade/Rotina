@@ -79,7 +79,7 @@ button { touch-action: manipulation; }
 .task-form > h1 { margin-bottom: 25px; }
 .task-form label { display: flex; flex-direction: column; gap: 8px; color: #b6bac3; font-size: 11px; margin-bottom: 17px; }
 .task-form label small { display: inline; color: #747985; }
-.task-form input { display: block; width: 100%; max-width: 100%; min-width: 0; border: 1px solid #30343e; border-radius: 13px; background: #191c24; color: white; padding: 13px 14px; font: inherit; font-size: 16px; outline: none; color-scheme: dark; -webkit-appearance: none; appearance: none; }
+.task-form input:not([type="checkbox"]) { display: block; width: 100%; max-width: 100%; min-width: 0; border: 1px solid #30343e; border-radius: 13px; background: #191c24; color: white; padding: 13px 14px; font: inherit; font-size: 16px; outline: none; color-scheme: dark; -webkit-appearance: none; appearance: none; }
 .task-form input[type="time"] { inline-size: 100%; box-sizing: border-box; }
 .task-form input:focus { border-color: #8c64e8; box-shadow: 0 0 0 3px #8c64e820; }
 .task-form fieldset { border: 0; padding: 0; margin: 0 0 18px; }
