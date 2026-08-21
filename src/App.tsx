@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ensureAnonymousSession, supabaseConfigured } from "./supabase";
-import { currentHousehold, excludeTaskForToday, finishWorkout, insertTask, loadRotina, pairHousehold, removeTaskRecord, saveClasses, saveWorkoutPlan, setTaskDone, updateExerciseWeight } from "./database";
+import { currentHousehold, excludeTaskForToday, finishWorkout, finishWorkoutForDate, insertTask, loadRotina, pairHousehold, removeTaskRecord, saveClasses, saveWorkoutPlan, setTaskDone, updateExerciseWeight } from "./database";
 
 type Screen = "resumo" | "hoje" | "treino" | "metas" | "espiritual" | "conquistas";
 type Person = "gileade" | "renata";
@@ -127,6 +127,7 @@ export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editingWorkout, setEditingWorkout] = useState<number | null>(null);
   const [editingClasses, setEditingClasses] = useState(false);
+  const [honorDay, setHonorDay] = useState<number | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [weeklyPlans, setWeeklyPlans] = useState<Record<Person,WeeklyPlan>>(() => {
     try { const saved=JSON.parse(localStorage.getItem("rotina-weekly-plans")||"null");return saved||{gileade:defaultWeeklyPlan,renata:defaultWeeklyPlan}; }
@@ -269,19 +270,34 @@ export default function Home() {
     if (householdId) void updateExerciseWeight(exercise.id, nextWeight).catch(error => showDatabaseError(error));
   };
 
+  const confirmHonorWorkout = (day: number) => {
+    const dayId = workoutDayIds[person][day];
+    if (!dayId) { showDatabaseError(new Error("O treino ainda não foi sincronizado.")); return; }
+    const target = new Date(now);
+    target.setHours(12, 0, 0, 0);
+    target.setDate(target.getDate() + (day - target.getDay()));
+    const dateStr = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}-${String(target.getDate()).padStart(2, "0")}`;
+    void finishWorkoutForDate(dayId, person, dateStr).then(awarded => {
+      if (awarded) reward(80, "Treino registrado!");
+      setTrainedWorkoutDays(current => ({ ...current, [person]: current[person].includes(day) ? current[person] : [...current[person], day] }));
+      setHonorDay(null);
+    }).catch(showDatabaseError);
+  };
+
   const goBack = () => {
     if (exerciseOpen) return setExerciseOpen(false);
     if (workout) return setWorkout(false);
     if (addingTask) return setAddingTask(false);
     if (editingWorkout !== null) return setEditingWorkout(null);
     if (editingClasses) return setEditingClasses(false);
+    if (honorDay !== null) return setHonorDay(null);
     if (menuOpen) return setMenuOpen(false);
     if (screenHistory.current.length > 1) screenHistory.current.pop();
     navigate(screenHistory.current.at(-1) || "resumo", true);
   };
 
   const startEdgeSwipe = (event: React.PointerEvent) => {
-    const canGoBack=screenHistory.current.length>1||exerciseOpen||workout||addingTask||editingWorkout!==null||editingClasses||menuOpen;
+    const canGoBack=screenHistory.current.length>1||exerciseOpen||workout||addingTask||editingWorkout!==null||editingClasses||honorDay!==null||menuOpen;
     edgeSwipe.current = { active: canGoBack&&event.clientX <= 24, startX: event.clientX, startY: event.clientY };
     if(edgeSwipe.current.active)setSwipeDragging(true);
   };
@@ -313,7 +329,7 @@ export default function Home() {
       <section className="content" key={screen}>
         {screen === "resumo" && <Resumo now={now} greeting={greeting} done={done} total={visibleTasks.length} workoutDone={workoutDone} workoutProgress={(series - 1) / 4 * 100} spiritualDone={spiritualDone} goalValues={goalValues} person={person} classes={groupSchedule[person]} celebrateRequested={summaryCelebrationPending} onCelebrated={()=>{const key=`rotina-summary-complete-${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`;localStorage.setItem(key,"true");setSummaryCelebrationPending(false);}} onGo={navigate} />}
         {screen === "hoje" && <Hoje now={now} tasks={visibleTasks} toggle={toggleTask} remove={(id) => {const task=tasks.find(t=>t.id===id);setTasks(current=>current.filter(task=>task.id!==id));if(task?.recurring)void excludeTaskForToday(id).catch(showDatabaseError);else void removeTaskRecord(id).catch(showDatabaseError);}} done={done} onAdd={() => setAddingTask(true)} />}
-        {screen === "treino" && !workout && <Treino now={now} person={person} plan={weeklyPlan} classes={groupSchedule[person]} selectedDay={workoutDay} workoutDone={workoutDone} trainedDays={trainedWorkoutDays[person]} onSelectDay={setWorkoutDay} onDetail={() => setExerciseOpen(true)} onStart={startWorkout} onEdit={() => setEditingWorkout(workoutDay)} onEditClasses={() => setEditingClasses(true)} />}
+        {screen === "treino" && !workout && <Treino now={now} person={person} plan={weeklyPlan} classes={groupSchedule[person]} selectedDay={workoutDay} workoutDone={workoutDone} trainedDays={trainedWorkoutDays[person]} onSelectDay={setWorkoutDay} onDetail={() => setExerciseOpen(true)} onStart={startWorkout} onEdit={() => setEditingWorkout(workoutDay)} onEditClasses={() => setEditingClasses(true)} onMarkDone={(day) => setHonorDay(day)} />}
         {screen === "treino" && workout && <WorkoutMode plan={weeklyPlan[workoutDay]} activeExercise={activeExercise} completed={completedExercises} series={series} rest={rest} ready={exerciseReady} onSeries={concludeSeries} onRestDone={()=>setRest(0)} onChoose={(index) => { const current=weeklyPlan[workoutDay].exercises[activeExercise]; setExerciseProgress(progress=>({...progress,[current.id]:{series,ready:exerciseReady}})); const target=exerciseProgress[weeklyPlan[workoutDay].exercises[index].id]; setActiveExercise(index); setSeries(target?.series||1); setRest(0); setExerciseReady(target?.ready||false); }} onWeight={changeWeight} />}
         {screen === "metas" && <Metas reward={reward} vals={goalValues} setVals={setGoalValues} />}
         {screen === "espiritual" && <Espiritual reward={reward} checked={spiritualDone} setChecked={setSpiritualDone} />}
@@ -330,6 +346,7 @@ export default function Home() {
       {menuOpen && <PersonMenu person={person} onSelect={selectPerson} onClose={() => setMenuOpen(false)} />}
       {editingWorkout !== null && <WorkoutEditor day={editingWorkout} plan={weeklyPlan} onClose={() => setEditingWorkout(null)} onSave={(next) => { saveWeeklyPlan(next); setEditingWorkout(null); }} />}
       {editingClasses && <GroupClassEditor person={person} schedule={groupSchedule} onClose={() => setEditingClasses(false)} onSave={(next) => { saveGroupSchedule(next); setEditingClasses(false); }} />}
+      {honorDay !== null && <WorkoutHonorModal day={honorDay} onClose={() => setHonorDay(null)} onConfirm={() => confirmHonorWorkout(honorDay)} />}
       {toast && <div className={`toast ${toast.startsWith("+") ? "success" : ""}`}><span>✦</span>{toast}</div>}
     </main>
   );
@@ -413,7 +430,7 @@ function AddTaskModal({ onClose, onAdd }: { onClose:()=>void; onAdd:(task:{title
   return <div className="modal"><form className="sheet task-form" onSubmit={(e)=>{e.preventDefault();if(title.trim())onAdd({title:title.trim(),level,tag,time,recurring});}}><button type="button" className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">NOVA ATIVIDADE</p><h1>Adicionar afazer</h1><label>Nome da atividade<input required value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex.: Organizar a cozinha" /></label><label>Horário <small>(opcional)</small><input type="time" value={time} onChange={e=>setTime(e.target.value)} /></label><fieldset><legend>Dificuldade</legend><div className="choice-row">{["Fácil","Médio","Difícil"].map(item=><button type="button" key={item} className={level===item?"selected":""} onClick={()=>setLevel(item)}>{item}</button>)}</div></fieldset><fieldset><legend>Categoria</legend><div className="choice-row categories">{["Casa","Juntos","Pessoal","Estudo","Saúde"].map(item=><button type="button" key={item} className={tag===item?"selected":""} onClick={()=>setTag(item)}>{item}</button>)}</div></fieldset><label className="recurring-toggle"><input type="checkbox" checked={recurring} onChange={e=>setRecurring(e.target.checked)} /><span className="toggle-track"><span className="toggle-thumb"/></span><span className="recurring-copy"><b>Repetir todos os dias</b><small>Aparece diariamente. Excluir num dia some só naquele dia.</small></span></label><button className="primary" type="submit">Adicionar atividade</button></form></div>;
 }
 
-function Treino({ now, person, plan, classes, selectedDay, workoutDone, trainedDays, onSelectDay, onDetail, onStart, onEdit, onEditClasses }: { now:Date; person:Person; plan:WeeklyPlan; classes:GroupClass[]; selectedDay:number; workoutDone:boolean; trainedDays:number[]; onSelectDay:(day:number)=>void; onDetail:()=>void; onStart:(day:number)=>void; onEdit:()=>void; onEditClasses:()=>void }) {
+function Treino({ now, person, plan, classes, selectedDay, workoutDone, trainedDays, onSelectDay, onDetail, onStart, onEdit, onEditClasses, onMarkDone }: { now:Date; person:Person; plan:WeeklyPlan; classes:GroupClass[]; selectedDay:number; workoutDone:boolean; trainedDays:number[]; onSelectDay:(day:number)=>void; onDetail:()=>void; onStart:(day:number)=>void; onEdit:()=>void; onEditClasses:()=>void; onMarkDone:(day:number)=>void }) {
   const today = now.getDay();
   const nextTrainingDay = Array.from({length:7},(_,index)=>(today+index+1)%7).find(day=>plan[day].exercises.length>0) ?? (today+1)%7;
   const shown = plan[selectedDay];
@@ -426,7 +443,7 @@ function Treino({ now, person, plan, classes, selectedDay, workoutDone, trainedD
   return <>
     <div className="page-head workout-page-head"><p className="eyebrow">{selectedDay === today ? "TREINO DE HOJE" : weekdayLabels[selectedDay].toLocaleUpperCase("pt-BR")}</p><h1>Treino de {person === "gileade" ? "Gileade" : "Renata"}</h1><p>{workoutDone&&selectedDay===today?"Treino concluído. Bom trabalho!":shown.exercises.length ? `Foco em ${shown.muscles}.` : "Dia de recuperação e descanso."}</p></div>
     <div className="workout-week">{weekdayLabels.map((label,day)=>{const trained=trainedDays.includes(day);return <button key={label} className={`${selectedDay===day?"selected":""} ${day===today?"today":""} ${trained?"trained":""}`} onClick={()=>onSelectDay(day)}><small>{label}</small><span>{trained?"✓":plan[day].exercises.length ? plan[day].title.replace("Treino ","") : "—"}</span></button>;})}</div>
-    <article className={`workout-hero compact-workout ${workoutDone && selectedDay===today?"completed-workout":""}`}><div className="workout-art has-image"><img src={`${import.meta.env.BASE_URL}rotina-casal.png`} alt="Casal construindo sua rotina de treino" /><span>{shown.muscles.toLocaleUpperCase("pt-BR")}</span>{workoutDone&&selectedDay===today&&<b className="workout-done-badge">✓ CONCLUÍDO</b>}</div><div className="workout-copy"><p>{shown.title.toLocaleUpperCase("pt-BR")}</p><h2>{shown.muscles}</h2><div className="workout-meta"><span>◉ {shown.exercises.length} exercícios</span><span>◷ {shown.duration} min</span><span>✦ +80</span></div>{shown.exercises.length>0 && selectedDay===today && !workoutDone && <button className="primary" onClick={()=>onStart(selectedDay)}>Iniciar treino</button>}</div></article>
+    <article className={`workout-hero compact-workout ${workoutDone && selectedDay===today?"completed-workout":""}`}><div className="workout-art has-image"><img src={`${import.meta.env.BASE_URL}rotina-casal.png`} alt="Casal construindo sua rotina de treino" /><span>{shown.muscles.toLocaleUpperCase("pt-BR")}</span>{workoutDone&&selectedDay===today&&<b className="workout-done-badge">✓ CONCLUÍDO</b>}</div><div className="workout-copy"><p>{shown.title.toLocaleUpperCase("pt-BR")}</p><h2>{shown.muscles}</h2><div className="workout-meta"><span>◉ {shown.exercises.length} exercícios</span><span>◷ {shown.duration} min</span><span>✦ +80</span></div>{shown.exercises.length>0 && selectedDay===today && !workoutDone && <button className="primary" onClick={()=>onStart(selectedDay)}>Iniciar treino</button>}{shown.exercises.length>0 && selectedDay<today && !trainedDays.includes(selectedDay) && <button className="outline-add honor-trigger" onClick={()=>onMarkDone(selectedDay)}>Já treinei, marcar como concluído</button>}</div></article>
     {workoutDone&&selectedDay===today&&<article className="next-workout-preview"><small>PRÓXIMO TREINO · {weekdayLabels[nextTrainingDay].toLocaleUpperCase("pt-BR")}</small><div><span><b>{plan[nextTrainingDay].title}</b><em>{plan[nextTrainingDay].muscles}</em></span><strong>{plan[nextTrainingDay].exercises.length} exercícios</strong></div></article>}
     <div className="section-title workout-list-title"><div><p>{selectedDay===today?"PROGRAMAÇÃO DO DIA":weekdayLabels[selectedDay].toLocaleUpperCase("pt-BR")}</p><h2>Exercícios</h2></div><button onClick={onEdit}>Editar</button></div>
     {workoutDone&&selectedDay===today&&<button className="completed-expand" onClick={()=>setExpandedCompleted(value=>!value)}>{expandedCompleted?"Ocultar exercícios":"Ver treino concluído"}<i className={expandedCompleted?"open":""}/></button>}
@@ -522,6 +539,13 @@ function WorkoutEditor({ day, plan, onClose, onSave }: { day:number; plan:Weekly
   const updateExercise=(index:number,field:keyof WorkoutExercise,value:string|number)=>setDraft(current=>({...current,[day]:{...current[day],exercises:current[day].exercises.map((item,itemIndex)=>itemIndex===index?{...item,[field]:value}:item)}}));
   const addExercise=()=>setDraft(current=>({...current,[day]:{...current[day],exercises:[...current[day].exercises,makeExercise(`manual-${Date.now()}`,"Novo exercício",3,"12","A definir",0)]}}));
   return <div className="modal"><div className="sheet workout-editor"><button className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">{weekdayLabels[day].toLocaleUpperCase("pt-BR")}</p><h1>Editar treino</h1><label>Nome do treino<input value={draft[day].title} onChange={event=>setDraft({...draft,[day]:{...draft[day],title:event.target.value}})}/></label><label>Grupos musculares<input value={draft[day].muscles} onChange={event=>setDraft({...draft,[day]:{...draft[day],muscles:event.target.value}})}/></label><div className="editor-exercises">{draft[day].exercises.map((exercise,index)=><article key={exercise.id}><input aria-label="Nome do exercício" value={exercise.name} onChange={event=>updateExercise(index,"name",event.target.value)}/><div><label>Séries<input type="number" min="1" value={exercise.sets} onChange={event=>updateExercise(index,"sets",Number(event.target.value))}/></label><label>Repetições<input value={exercise.reps} onChange={event=>updateExercise(index,"reps",event.target.value)}/></label><label>Carga<input type="number" min="0" value={exercise.weight} onChange={event=>updateExercise(index,"weight",Number(event.target.value))}/></label></div><button className="remove-exercise" aria-label={`Remover ${exercise.name}`} onClick={()=>setDraft(current=>({...current,[day]:{...current[day],exercises:current[day].exercises.filter((_,itemIndex)=>itemIndex!==index)}}))}>×</button></article>)}</div><button className="outline-add" onClick={addExercise}>＋ Adicionar exercício</button><button type="button" className="outline-add" onClick={async()=>{const copied=await copyToClipboard(formatWorkoutPrompt(draft[day]));setImportMessage(copied?"Treino copiado! Cole no campo abaixo em outro dia (sem precisar do cabeçalho do dia).":"Não foi possível copiar. Copie manualmente.");}}>⧉ Copiar treino deste dia</button><div className="prompt-import"><p className="eyebrow">IMPORTAR PLANO DA IA</p><p>Cole exercícios no formato “Supino reto - 4x12 - 20 kg” para adicionar neste dia ({weekdayLabels[day]}). Também aceita vários dias de uma vez, cada um com um cabeçalho como “Segunda-feira: Peito”.</p><textarea value={prompt} onChange={event=>setPrompt(event.target.value)} placeholder={"- Supino reto - 4x12 - 20 kg\n- Crucifixo - 3x12"}/><button type="button" onClick={()=>{const imported=parseWorkoutPrompt(prompt,draft,day);const count=Object.values(imported).reduce((sum,item)=>sum+item.exercises.length,0)-Object.values(draft).reduce((sum,item)=>sum+item.exercises.length,0);setDraft(imported);setImportMessage(count===0?"Revise o formato: não encontrei novos exercícios.":"Plano interpretado. Revise antes de salvar.");}}>Organizar texto</button>{importMessage&&<small>{importMessage}</small>}</div><button className="primary" onClick={()=>onSave(draft)}>Salvar treino</button></div></div>;
+}
+
+const honorPhrase = "Eu juro por Deus que eu fiz esse treino";
+function WorkoutHonorModal({ day, onClose, onConfirm }: { day:number; onClose:()=>void; onConfirm:()=>void }) {
+  const [value, setValue] = useState("");
+  const ready = value.trim() === honorPhrase;
+  return <div className="modal"><div className="sheet workout-editor honor-modal"><button className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">{weekdayLabels[day].toLocaleUpperCase("pt-BR")}</p><h1>Marcar treino como feito</h1><p className="honor-intro">Vocês esqueceram de finalizar esse treino no app? Para marcar como concluído sem repetir os exercícios, digite exatamente a frase abaixo e confirme.</p><p className="honor-phrase">“{honorPhrase}”</p><label>Digite a frase<textarea value={value} onChange={event=>setValue(event.target.value)} placeholder={honorPhrase} rows={2}/></label><button className="primary" disabled={!ready} onClick={onConfirm}>Confirmar treino concluído</button></div></div>;
 }
 
 function canonicalClassDay(value: string) {

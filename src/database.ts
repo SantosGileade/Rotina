@@ -64,3 +64,4 @@ export async function updateExerciseWeight(exerciseId:string,weight:number){
 }
 
 export async function finishWorkout(dayId:string,person:DbPerson){const {data,error}=await supabase.rpc("finish_workout",{target_workout_day:dayId,target_person:person});if(error)throw error;return Boolean(data);}
+export async function finishWorkoutForDate(dayId:string,person:DbPerson,date:string){const {data,error}=await supabase.rpc("finish_workout_for_date",{target_workout_day:dayId,target_person:person,target_date:date});if(error)throw error;return Boolean(data);}
