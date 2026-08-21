@@ -271,6 +271,7 @@ button { touch-action: manipulation; }
 .workout-mode .mode-center h1 { font-size:25px; margin:8px 0 0; }
 .workout-mode .rep-number { font-size:53px; margin:18px; }
 .workout-mode .load-control button { font-size:22px; }
+.workout-mode .load-control button.step-small { font-size:12px; }
 .active-rest { border:1px solid #5f4690; box-shadow:0 0 24px #6e4bae22; }
 .exercise-order { margin-top:24px; }
 .exercise-order>small { display:block; color:#8f72d2; font-size:8px; letter-spacing:1.3px; margin-bottom:8px; }
@@ -280,8 +281,8 @@ button { touch-action: manipulation; }
 .exercise-order button.active { border-color:#7753ca; background:#211a2f; color:#fff; }
 .exercise-order button:disabled { opacity:.45; }
 .workout-mode .fixed-action { margin-top:18px; }
-.workout-topbar { position:sticky; z-index:15; top:0; justify-content:space-between; height:52px; background:linear-gradient(180deg,#0d0c18 72%,transparent); }
-.workout-exit-top { border:1px solid #2b2f38; background:#171a21; border-radius:11px; padding:9px 12px; font-size:10px; color:#aeb2bc; }
+.workout-topbar { position:relative; justify-content:space-between; height:52px; }
+.workout-exit-top { border:none; background:none; padding:6px 4px; font-size:13px; color:#aeb2bc; }
 .workout-mode .series-action { background:linear-gradient(135deg,#39b978,#268c5a); box-shadow:0 10px 25px #268c5a32; }
 .workout-mode .finish-action { background:linear-gradient(135deg,#9868ee,#7143d2); }
 .workout-mode { padding-bottom:88px; }

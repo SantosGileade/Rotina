@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ensureAnonymousSession, supabaseConfigured } from "./supabase";
-import { currentHousehold, finishWorkout, insertTask, loadRotina, pairHousehold, removeTaskRecord, saveClasses, saveWorkoutPlan, setTaskDone } from "./database";
+import { currentHousehold, excludeTaskForToday, finishWorkout, insertTask, loadRotina, pairHousehold, removeTaskRecord, saveClasses, saveWorkoutPlan, setTaskDone, updateExerciseWeight } from "./database";
 
 type Screen = "resumo" | "hoje" | "treino" | "metas" | "espiritual" | "conquistas";
 type Person = "gileade" | "renata";
@@ -19,12 +19,12 @@ const Progress = ({ value, color = "purple" }: { value: number; color?: string }
 const Confetti = () => <div className="confetti-screen" aria-hidden="true">{Array.from({length:58},(_,i)=><i key={i} style={{"--left":`${2+(i*29)%96}%`,"--drift":`${(i%9-4)*14}px`,"--delay":`${(i%16)*.12}s`,"--duration":`${3.2+(i%7)*.22}s`,"--color":["#f5c75f","#68d79a","#a98bfa","#60b5f5","#f28aa7"][i%5]} as React.CSSProperties}/>)}</div>;
 
 const tasksSeed = [
-  { id: "1", title: "Arrumar a cama", time: "08:00", tag: "Casa", level: "Fácil", coins: 5, done: true, person: "both" },
-  { id: "2", title: "Trabalhar no projeto", time: "até 12:00", tag: "Foco", level: "Difícil", coins: 20, done: false, person: "gileade" },
-  { id: "3", title: "Estudar inglês", time: "20 min", tag: "Estudo", level: "Médio", coins: 10, done: false, person: "renata" },
-  { id: "4", title: "Ler 10 páginas", time: "", tag: "Leitura", level: "Fácil", coins: 5, done: true, person: "both" },
-  { id: "5", title: "Comprar algo para o jantar", time: "18:30", tag: "Juntos", level: "Médio", coins: 10, done: false, person: "both" },
-  { id: "6", title: "Organizar as finanças", time: "", tag: "Casa", level: "Difícil", coins: 20, done: false, person: "gileade" },
+  { id: "1", title: "Arrumar a cama", time: "08:00", tag: "Casa", level: "Fácil", coins: 5, done: true, person: "both", recurring: false },
+  { id: "2", title: "Trabalhar no projeto", time: "até 12:00", tag: "Foco", level: "Difícil", coins: 20, done: false, person: "gileade", recurring: false },
+  { id: "3", title: "Estudar inglês", time: "20 min", tag: "Estudo", level: "Médio", coins: 10, done: false, person: "renata", recurring: false },
+  { id: "4", title: "Ler 10 páginas", time: "", tag: "Leitura", level: "Fácil", coins: 5, done: true, person: "both", recurring: false },
+  { id: "5", title: "Comprar algo para o jantar", time: "18:30", tag: "Juntos", level: "Médio", coins: 10, done: false, person: "both", recurring: false },
+  { id: "6", title: "Organizar as finanças", time: "", tag: "Casa", level: "Difícil", coins: 20, done: false, person: "gileade", recurring: false },
 ];
 
 const defaultGroupClasses: GroupSchedule = {
@@ -120,6 +120,7 @@ export default function Home() {
   const [workoutDayIds,setWorkoutDayIds]=useState<Record<Person,Record<number,string>>>({gileade:{},renata:{}});
   const [workoutDone, setWorkoutDone] = useState(false);
   const [completedWorkouts,setCompletedWorkouts]=useState<Record<Person,boolean>>({gileade:false,renata:false});
+  const [trainedWorkoutDays,setTrainedWorkoutDays]=useState<Record<Person,number[]>>({gileade:[],renata:[]});
   const [spiritualDone, setSpiritualDone] = useState(false);
   const [goalValues, setGoalValues] = useState([3, 5, 5, 4]);
   const [addingTask, setAddingTask] = useState(false);
@@ -158,7 +159,8 @@ export default function Home() {
     const completionMap:Record<string,Person[]>={};
     data.completions.forEach((item:any)=>{completionMap[item.task_id]=[...(completionMap[item.task_id]||[]),item.person as Person];});
     setTaskCompletions(completionMap);
-    setTasks(data.tasks.map((item:any)=>({id:item.id,title:item.title,time:item.task_time?.slice(0,5)||"",tag:item.category,level:item.difficulty==="hard"?"Difícil":item.difficulty==="medium"?"Médio":"Fácil",coins:item.coin_reward,done:false,person:item.assignment})));
+    const excludedIds=new Set((data.exclusions as any[]).map((item:any)=>item.task_id));
+    setTasks(data.tasks.filter((item:any)=>!excludedIds.has(item.id)).map((item:any)=>({id:item.id,title:item.title,time:item.task_time?.slice(0,5)||"",tag:item.category,level:item.difficulty==="hard"?"Difícil":item.difficulty==="medium"?"Médio":"Fácil",coins:item.coin_reward,done:false,person:item.assignment,recurring:Boolean(item.recurring)})));
     setCoins(data.balance);
     const plans:Record<Person,WeeklyPlan>={gileade:structuredClone(defaultWeeklyPlan),renata:structuredClone(defaultWeeklyPlan)};
     const ids:Record<Person,Record<number,string>>={gileade:{},renata:{}};
@@ -167,7 +169,11 @@ export default function Home() {
     setWeeklyPlans(plans);setWorkoutDayIds(ids);localStorage.setItem("rotina-weekly-plans",JSON.stringify(plans));
     const schedules:GroupSchedule={gileade:[],renata:[]};const dayNames=["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"];
     (data.classes as any[]).forEach(item=>schedules[item.person as Person].push({id:item.id,day:dayNames[item.day_of_week],name:item.name,time:item.class_time.slice(0,5)}));setGroupSchedule(schedules);localStorage.setItem("rotina-group-classes",JSON.stringify(schedules));
-    const completed={gileade:(data.sessions as any[]).some(item=>item.person==="gileade"),renata:(data.sessions as any[]).some(item=>item.person==="renata")};setCompletedWorkouts(completed);setWorkoutDone(completed[person]);
+    const todayStr=`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}-${String(new Date().getDate()).padStart(2,"0")}`;
+    const completed={gileade:(data.sessions as any[]).some(item=>item.person==="gileade"&&item.completion_date===todayStr),renata:(data.sessions as any[]).some(item=>item.person==="renata"&&item.completion_date===todayStr)};setCompletedWorkouts(completed);setWorkoutDone(completed[person]);
+    const trained:Record<Person,number[]>={gileade:[],renata:[]};
+    (data.sessions as any[]).forEach(item=>{const owner=item.person as Person;const weekday=new Date(`${item.completion_date}T12:00:00`).getDay();if(!trained[owner].includes(weekday))trained[owner].push(weekday);});
+    setTrainedWorkoutDays(trained);
     setDatabaseState("ready");
   }
 
@@ -179,6 +185,11 @@ export default function Home() {
     const timer = window.setInterval(() => setRest((v) => Math.max(0, v - 1)), 1000);
     return () => window.clearInterval(timer);
   }, [rest]);
+
+  useEffect(() => {
+    document.body.classList.toggle("scroll-locked", workout);
+    return () => document.body.classList.remove("scroll-locked");
+  }, [workout]);
 
   useEffect(() => {
     const refreshClock = () => setNow(new Date());
@@ -231,11 +242,16 @@ export default function Home() {
     if (exerciseReady) {
       const completed = [...completedExercises, exercise.id];
       setCompletedExercises(completed);
-      const nextIndex = weeklyPlan[workoutDay].exercises.findIndex((item) => !completed.includes(item.id));
+      const dayExercises = weeklyPlan[workoutDay].exercises;
+      let nextIndex = -1;
+      for (let offset = 1; offset <= dayExercises.length; offset += 1) {
+        const candidate = (activeExercise + offset) % dayExercises.length;
+        if (!completed.includes(dayExercises[candidate].id)) { nextIndex = candidate; break; }
+      }
       if (nextIndex === -1) {
         const dayId=workoutDayIds[person][workoutDay];
         if(!dayId){showDatabaseError(new Error("O treino ainda não foi sincronizado."));return;}
-        void finishWorkout(dayId,person).then(awarded=>{if(awarded)reward(80,"Treino completo!");const nextCompleted={...completedWorkouts,[person]:workoutDay===now.getDay()||completedWorkouts[person]};setCompletedWorkouts(nextCompleted);setWorkoutDone(nextCompleted[person]);setWorkout(false);setSeries(1);setExerciseReady(false);}).catch(showDatabaseError);return;
+        void finishWorkout(dayId,person).then(awarded=>{if(awarded)reward(80,"Treino completo!");const nextCompleted={...completedWorkouts,[person]:workoutDay===now.getDay()||completedWorkouts[person]};setCompletedWorkouts(nextCompleted);setWorkoutDone(nextCompleted[person]);setTrainedWorkoutDays(current=>({...current,[person]:current[person].includes(workoutDay)?current[person]:[...current[person],workoutDay]}));setWorkout(false);setSeries(1);setExerciseReady(false);}).catch(showDatabaseError);return;
       }
       setActiveExercise(nextIndex); setSeries(1); setRest(0); setExerciseReady(false); return;
     }
@@ -244,8 +260,13 @@ export default function Home() {
   };
 
   const changeWeight = (amount: number) => {
-    const next = { ...weeklyPlan, [workoutDay]: { ...weeklyPlan[workoutDay], exercises: weeklyPlan[workoutDay].exercises.map((exercise, index) => index === activeExercise ? { ...exercise, weight: Math.max(0, exercise.weight + amount) } : exercise) } };
-    saveWeeklyPlan(next);
+    const exercise = weeklyPlan[workoutDay].exercises[activeExercise];
+    const nextWeight = Math.max(0, exercise.weight + amount);
+    const next = { ...weeklyPlan, [workoutDay]: { ...weeklyPlan[workoutDay], exercises: weeklyPlan[workoutDay].exercises.map((item, index) => index === activeExercise ? { ...item, weight: nextWeight } : item) } };
+    const all = { ...weeklyPlans, [person]: next };
+    setWeeklyPlans(all);
+    localStorage.setItem("rotina-weekly-plans", JSON.stringify(all));
+    if (householdId) void updateExerciseWeight(exercise.id, nextWeight).catch(error => showDatabaseError(error));
   };
 
   const goBack = () => {
@@ -270,9 +291,9 @@ export default function Home() {
     if(shouldReturn){setSwipeOffset(window.innerWidth);window.setTimeout(()=>{goBack();setSwipeOffset(0);},170);}else setSwipeOffset(0);
   };
 
-  const addTask = async (task: { title: string; level: string; tag: string; time: string }) => {
+  const addTask = async (task: { title: string; level: string; tag: string; time: string; recurring: boolean }) => {
     const coinMap: Record<string, number> = { "Fácil": 5, "Médio": 10, "Difícil": 20 };
-    try{const assignment=task.tag==="Juntos"?"both":person;const row=await insertTask(householdId,databaseUserId,{title:task.title,category:task.tag,difficulty:task.level==="Difícil"?"hard":task.level==="Médio"?"medium":"easy",coin_reward:coinMap[task.level]||5,assignment,task_time:task.time||null});setTasks(current=>[...current,{id:row.id,...task,coins:coinMap[task.level]||5,done:false,person:assignment}]);setAddingTask(false);setToast("Atividade adicionada");window.setTimeout(()=>setToast(""),2200);}catch(error){showDatabaseError(error);}
+    try{const assignment=task.tag==="Juntos"?"both":person;const row=await insertTask(householdId,databaseUserId,{title:task.title,category:task.tag,difficulty:task.level==="Difícil"?"hard":task.level==="Médio"?"medium":"easy",coin_reward:coinMap[task.level]||5,assignment,task_time:task.time||null,recurring:task.recurring});setTasks(current=>[...current,{id:row.id,...task,coins:coinMap[task.level]||5,done:false,person:assignment}]);setAddingTask(false);setToast("Atividade adicionada");window.setTimeout(()=>setToast(""),2200);}catch(error){showDatabaseError(error);}
   };
 
   if(databaseState!=="ready")return <DatabaseGate state={databaseState} error={databaseError}/>;
@@ -282,14 +303,14 @@ export default function Home() {
       <div className="ambient one" /><div className="ambient two" />
       <header className={`topbar ${screen === "hoje" || screen === "treino" ? "today-topbar" : ""} ${workout?"workout-topbar":""}`}>
         {screen !== "hoje" && screen !== "treino" && <div className="brand-group"><button className="menu-trigger" onClick={() => setMenuOpen(true)} aria-label="Abrir configurações"><i/><i/><i/></button><button className="brand text-brand" onClick={() => navigate("resumo")}>Rotina</button></div>}
-        {screen==="treino"&&workout&&<button className="workout-exit-top" onClick={()=>setWorkout(false)}>Sair do treino</button>}
+        {screen==="treino"&&workout&&<button className="workout-exit-top" onClick={()=>setWorkout(false)}>‹ Sair</button>}
         <button className="coin-pill" onClick={() => navigate("conquistas")}><Icon>✦</Icon><b>{coins}</b><small> moedas</small></button>
       </header>
 
       <section className="content" key={screen}>
         {screen === "resumo" && <Resumo now={now} greeting={greeting} done={done} total={visibleTasks.length} workoutDone={workoutDone} workoutProgress={(series - 1) / 4 * 100} spiritualDone={spiritualDone} goalValues={goalValues} person={person} classes={groupSchedule[person]} celebrateRequested={summaryCelebrationPending} onCelebrated={()=>{const key=`rotina-summary-complete-${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`;localStorage.setItem(key,"true");setSummaryCelebrationPending(false);}} onGo={navigate} />}
-        {screen === "hoje" && <Hoje now={now} tasks={visibleTasks} toggle={toggleTask} remove={(id) => {setTasks(current=>current.filter(task=>task.id!==id));void removeTaskRecord(id).catch(showDatabaseError);}} done={done} onAdd={() => setAddingTask(true)} />}
-        {screen === "treino" && !workout && <Treino now={now} person={person} plan={weeklyPlan} classes={groupSchedule[person]} selectedDay={workoutDay} workoutDone={workoutDone} onSelectDay={setWorkoutDay} onDetail={() => setExerciseOpen(true)} onStart={startWorkout} onEdit={() => setEditingWorkout(workoutDay)} onEditClasses={() => setEditingClasses(true)} />}
+        {screen === "hoje" && <Hoje now={now} tasks={visibleTasks} toggle={toggleTask} remove={(id) => {const task=tasks.find(t=>t.id===id);setTasks(current=>current.filter(task=>task.id!==id));if(task?.recurring)void excludeTaskForToday(id).catch(showDatabaseError);else void removeTaskRecord(id).catch(showDatabaseError);}} done={done} onAdd={() => setAddingTask(true)} />}
+        {screen === "treino" && !workout && <Treino now={now} person={person} plan={weeklyPlan} classes={groupSchedule[person]} selectedDay={workoutDay} workoutDone={workoutDone} trainedDays={trainedWorkoutDays[person]} onSelectDay={setWorkoutDay} onDetail={() => setExerciseOpen(true)} onStart={startWorkout} onEdit={() => setEditingWorkout(workoutDay)} onEditClasses={() => setEditingClasses(true)} />}
         {screen === "treino" && workout && <WorkoutMode plan={weeklyPlan[workoutDay]} activeExercise={activeExercise} completed={completedExercises} series={series} rest={rest} ready={exerciseReady} onSeries={concludeSeries} onRestDone={()=>setRest(0)} onChoose={(index) => { const current=weeklyPlan[workoutDay].exercises[activeExercise]; setExerciseProgress(progress=>({...progress,[current.id]:{series,ready:exerciseReady}})); const target=exerciseProgress[weeklyPlan[workoutDay].exercises[index].id]; setActiveExercise(index); setSeries(target?.series||1); setRest(0); setExerciseReady(target?.ready||false); }} onWeight={changeWeight} />}
         {screen === "metas" && <Metas reward={reward} vals={goalValues} setVals={setGoalValues} />}
         {screen === "espiritual" && <Espiritual reward={reward} checked={spiritualDone} setChecked={setSpiritualDone} />}
@@ -350,7 +371,7 @@ function Resumo({ now, greeting, done, total, workoutDone, workoutProgress, spir
       <button onClick={() => onGo("hoje")} className="stat-card"><small>Afazeres</small><strong>{done}<em>/{total}</em></strong><span>concluídos</span></button>
       <button onClick={() => onGo("treino")} className="stat-card"><small>Treino</small><strong>{workoutDone ? 1 : 0}<em>/1</em></strong><span>{workoutDone ? "concluído" : "pendente"}</span></button>
       <button onClick={() => onGo("espiritual")} className="stat-card"><small>Espiritual</small><strong>{spiritualDone ? 1 : 0}<em>/1</em></strong><span>{spiritualDone ? "concluído" : "pendente"}</span></button>
-      <button className="stat-card water-card"><small>Água</small><strong>6<em>/8</em></strong><span>copos</span></button>
+      <button onClick={() => onGo("metas")} className="stat-card"><small>Metas</small><strong>{goalPercent}<em>%</em></strong><span>da semana</span></button>
     </div>
     <div className="section-title next-title"><h2>Próximo</h2><button onClick={() => { onGo("treino"); setTimeout(() => document.getElementById("aulas-coletivas")?.scrollIntoView(), 80); }}>Ver mais</button></div>
     <div className="next-grid">
@@ -381,15 +402,15 @@ function SwipeTask({ task, onToggle, onDelete }: { task: typeof tasksSeed[number
   const down = (e:React.PointerEvent) => { start.current={x:e.clientX,y:e.clientY}; moved.current=false; setDragging(true); e.currentTarget.setPointerCapture(e.pointerId); };
   const move = (e:React.PointerEvent) => { if(!dragging)return; const dx=e.clientX-start.current.x; const dy=e.clientY-start.current.y; if(Math.abs(dy)>35){setOffset(0);return;} if(dx<0){setOffset(Math.max(-125,dx)); if(dx<-12)moved.current=true;} };
   const up = () => { setDragging(false); if(offset<=-105) onDelete(); setOffset(0); };
-  return <div className="swipe-task"><div className="delete-reveal"><span>⌫</span><b>Excluir</b></div><button className={`task ${task.done?"done":""}`} style={{transform:`translateX(${offset}px)`,transition:dragging?"none":"transform .22s ease"}} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onClick={()=>{if(!moved.current)onToggle();}}><span className="check">{task.done&&"✓"}</span><span className="task-copy"><b>{task.title}</b><small>{task.tag} · <em className={task.level.toLowerCase()}>{task.level}</em> · +{task.coins} ✦</small></span><time>{task.time}</time></button></div>;
+  return <div className="swipe-task"><div className="delete-reveal"><span>⌫</span><b>Excluir</b></div><button className={`task ${task.done?"done":""}`} style={{transform:`translateX(${offset}px)`,transition:dragging?"none":"transform .22s ease"}} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onClick={()=>{if(!moved.current)onToggle();}}><span className="check">{task.done&&"✓"}</span><span className="task-copy"><b>{task.title}{task.recurring&&<i className="recurring-badge" title="Tarefa rotineira">↻</i>}</b><small>{task.tag} · <em className={task.level.toLowerCase()}>{task.level}</em> · +{task.coins} ✦</small></span><time>{task.time}</time></button></div>;
 }
 
-function AddTaskModal({ onClose, onAdd }: { onClose:()=>void; onAdd:(task:{title:string;level:string;tag:string;time:string})=>void }) {
-  const [title,setTitle]=useState(""); const [level,setLevel]=useState("Fácil"); const [tag,setTag]=useState("Casa"); const [time,setTime]=useState("");
-  return <div className="modal"><form className="sheet task-form" onSubmit={(e)=>{e.preventDefault();if(title.trim())onAdd({title:title.trim(),level,tag,time});}}><button type="button" className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">NOVA ATIVIDADE</p><h1>Adicionar afazer</h1><label>Nome da atividade<input required value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex.: Organizar a cozinha" /></label><label>Horário <small>(opcional)</small><input type="time" value={time} onChange={e=>setTime(e.target.value)} /></label><fieldset><legend>Dificuldade</legend><div className="choice-row">{["Fácil","Médio","Difícil"].map(item=><button type="button" key={item} className={level===item?"selected":""} onClick={()=>setLevel(item)}>{item}</button>)}</div></fieldset><fieldset><legend>Categoria</legend><div className="choice-row categories">{["Casa","Juntos","Pessoal","Estudo","Saúde"].map(item=><button type="button" key={item} className={tag===item?"selected":""} onClick={()=>setTag(item)}>{item}</button>)}</div></fieldset><button className="primary" type="submit">Adicionar atividade</button></form></div>;
+function AddTaskModal({ onClose, onAdd }: { onClose:()=>void; onAdd:(task:{title:string;level:string;tag:string;time:string;recurring:boolean})=>void }) {
+  const [title,setTitle]=useState(""); const [level,setLevel]=useState("Fácil"); const [tag,setTag]=useState("Casa"); const [time,setTime]=useState(""); const [recurring,setRecurring]=useState(false);
+  return <div className="modal"><form className="sheet task-form" onSubmit={(e)=>{e.preventDefault();if(title.trim())onAdd({title:title.trim(),level,tag,time,recurring});}}><button type="button" className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">NOVA ATIVIDADE</p><h1>Adicionar afazer</h1><label>Nome da atividade<input required value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex.: Organizar a cozinha" /></label><label>Horário <small>(opcional)</small><input type="time" value={time} onChange={e=>setTime(e.target.value)} /></label><fieldset><legend>Dificuldade</legend><div className="choice-row">{["Fácil","Médio","Difícil"].map(item=><button type="button" key={item} className={level===item?"selected":""} onClick={()=>setLevel(item)}>{item}</button>)}</div></fieldset><fieldset><legend>Categoria</legend><div className="choice-row categories">{["Casa","Juntos","Pessoal","Estudo","Saúde"].map(item=><button type="button" key={item} className={tag===item?"selected":""} onClick={()=>setTag(item)}>{item}</button>)}</div></fieldset><label className="recurring-toggle"><input type="checkbox" checked={recurring} onChange={e=>setRecurring(e.target.checked)} /><span><b>Repetir todos os dias</b><small>Aparece diariamente. Excluir num dia some só naquele dia.</small></span></label><button className="primary" type="submit">Adicionar atividade</button></form></div>;
 }
 
-function Treino({ now, person, plan, classes, selectedDay, workoutDone, onSelectDay, onDetail, onStart, onEdit, onEditClasses }: { now:Date; person:Person; plan:WeeklyPlan; classes:GroupClass[]; selectedDay:number; workoutDone:boolean; onSelectDay:(day:number)=>void; onDetail:()=>void; onStart:(day:number)=>void; onEdit:()=>void; onEditClasses:()=>void }) {
+function Treino({ now, person, plan, classes, selectedDay, workoutDone, trainedDays, onSelectDay, onDetail, onStart, onEdit, onEditClasses }: { now:Date; person:Person; plan:WeeklyPlan; classes:GroupClass[]; selectedDay:number; workoutDone:boolean; trainedDays:number[]; onSelectDay:(day:number)=>void; onDetail:()=>void; onStart:(day:number)=>void; onEdit:()=>void; onEditClasses:()=>void }) {
   const today = now.getDay();
   const nextTrainingDay = Array.from({length:7},(_,index)=>(today+index+1)%7).find(day=>plan[day].exercises.length>0) ?? (today+1)%7;
   const shown = plan[selectedDay];
@@ -401,7 +422,7 @@ function Treino({ now, person, plan, classes, selectedDay, workoutDone, onSelect
   const visibleClasses=expandedClasses?classes:todayClasses;
   return <>
     <div className="page-head workout-page-head"><p className="eyebrow">{selectedDay === today ? "TREINO DE HOJE" : weekdayLabels[selectedDay].toLocaleUpperCase("pt-BR")}</p><h1>Treino de {person === "gileade" ? "Gileade" : "Renata"}</h1><p>{workoutDone&&selectedDay===today?"Treino concluído. Bom trabalho!":shown.exercises.length ? `Foco em ${shown.muscles}.` : "Dia de recuperação e descanso."}</p></div>
-    <div className="workout-week">{weekdayLabels.map((label,day)=><button key={label} className={`${selectedDay===day?"selected":""} ${day===today?"today":""}`} onClick={()=>onSelectDay(day)}><small>{label}</small><span>{plan[day].exercises.length ? plan[day].title.replace("Treino ","") : "—"}</span></button>)}</div>
+    <div className="workout-week">{weekdayLabels.map((label,day)=>{const trained=trainedDays.includes(day);return <button key={label} className={`${selectedDay===day?"selected":""} ${day===today?"today":""} ${trained?"trained":""}`} onClick={()=>onSelectDay(day)}><small>{label}</small><span>{trained?"✓":plan[day].exercises.length ? plan[day].title.replace("Treino ","") : "—"}</span></button>;})}</div>
     <article className={`workout-hero compact-workout ${workoutDone && selectedDay===today?"completed-workout":""}`}><div className="workout-art has-image"><img src={`${import.meta.env.BASE_URL}rotina-casal.png`} alt="Casal construindo sua rotina de treino" /><span>{shown.muscles.toLocaleUpperCase("pt-BR")}</span>{workoutDone&&selectedDay===today&&<b className="workout-done-badge">✓ CONCLUÍDO</b>}</div><div className="workout-copy"><p>{shown.title.toLocaleUpperCase("pt-BR")}</p><h2>{shown.muscles}</h2><div className="workout-meta"><span>◉ {shown.exercises.length} exercícios</span><span>◷ {shown.duration} min</span><span>✦ +80</span></div>{shown.exercises.length>0 && selectedDay===today && !workoutDone && <button className="primary" onClick={()=>onStart(selectedDay)}>Iniciar treino</button>}</div></article>
     {workoutDone&&selectedDay===today&&<article className="next-workout-preview"><small>PRÓXIMO TREINO · {weekdayLabels[nextTrainingDay].toLocaleUpperCase("pt-BR")}</small><div><span><b>{plan[nextTrainingDay].title}</b><em>{plan[nextTrainingDay].muscles}</em></span><strong>{plan[nextTrainingDay].exercises.length} exercícios</strong></div></article>}
     <div className="section-title workout-list-title"><div><p>{selectedDay===today?"PROGRAMAÇÃO DO DIA":weekdayLabels[selectedDay].toLocaleUpperCase("pt-BR")}</p><h2>Exercícios</h2></div><button onClick={onEdit}>Editar</button></div>
@@ -444,7 +465,7 @@ function WorkoutMode({ plan, activeExercise, completed, series, rest, ready, onS
   const guide = getExerciseGuide(exercise.name);
   const completedCount = completed.length;
   const finalAction=ready;
-  return <div className="workout-mode"><div className="mode-top"><span>EXERCÍCIO {activeExercise+1} DE {plan.exercises.length}</span><b>{completedCount}/{plan.exercises.length} feitos</b></div><Progress value={completedCount/plan.exercises.length*100}/><div className="mode-center"><div className={`exercise-orb ${guide?"has-guide":""}`}>{guide?<img src={`${import.meta.env.BASE_URL}exercises/${guide.image}`} alt={`Demonstração de ${exercise.name}`}/>:<span>Imagem ainda<br/>não disponível</span>}</div>{guide&&<p className="exercise-quick-tip">{guide.tip}</p>}<p className="series-indicator">SÉRIE <strong>{series}</strong> DE {exercise.sets}</p><h1>{exercise.name}</h1><div className="rep-number">{exercise.reps}<small>{exercise.reps.includes("min")||exercise.reps.includes("seg")?"duração":"repetições"}</small></div><div className="load-control"><button onClick={()=>onWeight(-1)} aria-label="Diminuir carga">−</button><div><b>{exercise.weight}</b><small>{exercise.weight ? "kg de cada lado" : "sem carga"}</small></div><button onClick={()=>onWeight(1)} aria-label="Aumentar carga">＋</button></div>{rest>0&&<div className="rest active-rest"><span>Descanso</span><b>00:{String(rest).padStart(2,"0")}</b></div>}</div><div className="exercise-order"><small>TROCAR ORDEM</small><div>{plan.exercises.map((item,index)=><button key={item.id} disabled={completed.includes(item.id)} className={index===activeExercise?"active":""} onClick={()=>onChoose(index)}><span>{completed.includes(item.id)?"✓":index+1}</span>{item.name}</button>)}</div></div><button className={`primary fixed-action ${finalAction?"finish-action":"series-action"}`} onClick={rest>0?onRestDone:onSeries}>{rest>0?`Iniciar série ${series}`:ready ? (completedCount===plan.exercises.length-1?"Finalizar treino":"Finalizar exercício") : series===exercise.sets?"Concluir última série":"Concluir série"}</button></div>;
+  return <div className="workout-mode"><div className="mode-top"><span>EXERCÍCIO {activeExercise+1} DE {plan.exercises.length}</span><b>{completedCount}/{plan.exercises.length} feitos</b></div><Progress value={completedCount/plan.exercises.length*100}/><div className="mode-center"><div className={`exercise-orb ${guide?"has-guide":""}`}>{guide?<img src={`${import.meta.env.BASE_URL}exercises/${guide.image}`} alt={`Demonstração de ${exercise.name}`}/>:<span>Imagem ainda<br/>não disponível</span>}</div>{guide&&<p className="exercise-quick-tip">{guide.tip}</p>}<p className="series-indicator">SÉRIE <strong>{series}</strong> DE {exercise.sets}</p><h1>{exercise.name}</h1><div className="rep-number">{exercise.reps}<small>{exercise.reps.includes("min")||exercise.reps.includes("seg")?"duração":"repetições"}</small></div><div className="load-control"><button className="step-small" onClick={()=>onWeight(-5)} aria-label="Diminuir 5kg">−5</button><button onClick={()=>onWeight(-1)} aria-label="Diminuir carga">−</button><div><b>{exercise.weight}</b><small>{exercise.weight ? "kg de cada lado" : "sem carga"}</small></div><button onClick={()=>onWeight(1)} aria-label="Aumentar carga">＋</button><button className="step-small" onClick={()=>onWeight(5)} aria-label="Aumentar 5kg">+5</button></div>{rest>0&&<div className="rest active-rest"><span>Descanso</span><b>00:{String(rest).padStart(2,"0")}</b></div>}</div><div className="exercise-order"><small>TROCAR ORDEM</small><div>{plan.exercises.map((item,index)=><button key={item.id} disabled={completed.includes(item.id)} className={index===activeExercise?"active":""} onClick={()=>onChoose(index)}><span>{completed.includes(item.id)?"✓":index+1}</span>{item.name}</button>)}</div></div><button className={`primary fixed-action ${finalAction?"finish-action":"series-action"}`} onClick={rest>0?onRestDone:onSeries}>{rest>0?`Iniciar série ${series}`:ready ? (completedCount===plan.exercises.length-1?"Finalizar treino":"Finalizar exercício") : series===exercise.sets?"Concluir última série":"Concluir série"}</button></div>;
 }
 
 function parseWorkoutPrompt(text: string, current: WeeklyPlan): WeeklyPlan {
@@ -474,13 +495,32 @@ function parseWorkoutPrompt(text: string, current: WeeklyPlan): WeeklyPlan {
   return next;
 }
 
+function formatWorkoutPrompt(day: number, workout: WorkoutDay): string {
+  const dayNames = ["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"];
+  const lines = workout.exercises.map(exercise => `- ${exercise.name} - ${exercise.sets}x${exercise.reps}${exercise.weight ? ` - ${exercise.weight} kg` : ""}`);
+  return [`${dayNames[day]}: ${workout.muscles}`, ...lines].join("\n");
+}
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    try {
+      const area = document.createElement("textarea");
+      area.value = text; area.style.position = "fixed"; area.style.opacity = "0";
+      document.body.appendChild(area); area.select();
+      document.execCommand("copy"); document.body.removeChild(area);
+      return true;
+    } catch { return false; }
+  }
+}
+
 function WorkoutEditor({ day, plan, onClose, onSave }: { day:number; plan:WeeklyPlan; onClose:()=>void; onSave:(plan:WeeklyPlan)=>void }) {
   const [draft,setDraft]=useState<WeeklyPlan>(()=>JSON.parse(JSON.stringify(plan)));
   const [prompt,setPrompt]=useState("");
   const [importMessage,setImportMessage]=useState("");
   const updateExercise=(index:number,field:keyof WorkoutExercise,value:string|number)=>setDraft(current=>({...current,[day]:{...current[day],exercises:current[day].exercises.map((item,itemIndex)=>itemIndex===index?{...item,[field]:value}:item)}}));
   const addExercise=()=>setDraft(current=>({...current,[day]:{...current[day],exercises:[...current[day].exercises,makeExercise(`manual-${Date.now()}`,"Novo exercício",3,"12","A definir",0)]}}));
-  return <div className="modal"><div className="sheet workout-editor"><button className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">{weekdayLabels[day].toLocaleUpperCase("pt-BR")}</p><h1>Editar treino</h1><label>Nome do treino<input value={draft[day].title} onChange={event=>setDraft({...draft,[day]:{...draft[day],title:event.target.value}})}/></label><label>Grupos musculares<input value={draft[day].muscles} onChange={event=>setDraft({...draft,[day]:{...draft[day],muscles:event.target.value}})}/></label><div className="editor-exercises">{draft[day].exercises.map((exercise,index)=><article key={exercise.id}><input aria-label="Nome do exercício" value={exercise.name} onChange={event=>updateExercise(index,"name",event.target.value)}/><div><label>Séries<input type="number" min="1" value={exercise.sets} onChange={event=>updateExercise(index,"sets",Number(event.target.value))}/></label><label>Repetições<input value={exercise.reps} onChange={event=>updateExercise(index,"reps",event.target.value)}/></label><label>Carga<input type="number" min="0" value={exercise.weight} onChange={event=>updateExercise(index,"weight",Number(event.target.value))}/></label></div><button className="remove-exercise" aria-label={`Remover ${exercise.name}`} onClick={()=>setDraft(current=>({...current,[day]:{...current[day],exercises:current[day].exercises.filter((_,itemIndex)=>itemIndex!==index)}}))}>×</button></article>)}</div><button className="outline-add" onClick={addExercise}>＋ Adicionar exercício</button><div className="prompt-import"><p className="eyebrow">IMPORTAR PLANO DA IA</p><p>Cole um plano com o dia e exercícios no formato “Supino reto - 4x12 - 20 kg”. É possível enviar vários dias de uma vez.</p><textarea value={prompt} onChange={event=>setPrompt(event.target.value)} placeholder={"Segunda-feira: Peito\n- Supino reto - 4x12 - 20 kg\n- Crucifixo - 3x12"}/><button type="button" onClick={()=>{const imported=parseWorkoutPrompt(prompt,draft);const count=Object.values(imported).reduce((sum,item)=>sum+item.exercises.length,0)-Object.values(draft).reduce((sum,item)=>sum+item.exercises.length,0);setDraft(imported);setImportMessage(count===0?"Revise o formato: não encontrei novos exercícios.":"Plano interpretado. Revise antes de salvar.");}}>Organizar texto</button>{importMessage&&<small>{importMessage}</small>}</div><button className="primary" onClick={()=>onSave(draft)}>Salvar treino</button></div></div>;
+  return <div className="modal"><div className="sheet workout-editor"><button className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">{weekdayLabels[day].toLocaleUpperCase("pt-BR")}</p><h1>Editar treino</h1><label>Nome do treino<input value={draft[day].title} onChange={event=>setDraft({...draft,[day]:{...draft[day],title:event.target.value}})}/></label><label>Grupos musculares<input value={draft[day].muscles} onChange={event=>setDraft({...draft,[day]:{...draft[day],muscles:event.target.value}})}/></label><div className="editor-exercises">{draft[day].exercises.map((exercise,index)=><article key={exercise.id}><input aria-label="Nome do exercício" value={exercise.name} onChange={event=>updateExercise(index,"name",event.target.value)}/><div><label>Séries<input type="number" min="1" value={exercise.sets} onChange={event=>updateExercise(index,"sets",Number(event.target.value))}/></label><label>Repetições<input value={exercise.reps} onChange={event=>updateExercise(index,"reps",event.target.value)}/></label><label>Carga<input type="number" min="0" value={exercise.weight} onChange={event=>updateExercise(index,"weight",Number(event.target.value))}/></label></div><button className="remove-exercise" aria-label={`Remover ${exercise.name}`} onClick={()=>setDraft(current=>({...current,[day]:{...current[day],exercises:current[day].exercises.filter((_,itemIndex)=>itemIndex!==index)}}))}>×</button></article>)}</div><button className="outline-add" onClick={addExercise}>＋ Adicionar exercício</button><button type="button" className="outline-add" onClick={async()=>{const copied=await copyToClipboard(formatWorkoutPrompt(day,draft[day]));setImportMessage(copied?"Treino copiado! Cole no campo abaixo em outro dia.":"Não foi possível copiar. Copie manualmente.");}}>⧉ Copiar treino deste dia</button><div className="prompt-import"><p className="eyebrow">IMPORTAR PLANO DA IA</p><p>Cole um plano com o dia e exercícios no formato “Supino reto - 4x12 - 20 kg”. É possível enviar vários dias de uma vez.</p><textarea value={prompt} onChange={event=>setPrompt(event.target.value)} placeholder={"Segunda-feira: Peito\n- Supino reto - 4x12 - 20 kg\n- Crucifixo - 3x12"}/><button type="button" onClick={()=>{const imported=parseWorkoutPrompt(prompt,draft);const count=Object.values(imported).reduce((sum,item)=>sum+item.exercises.length,0)-Object.values(draft).reduce((sum,item)=>sum+item.exercises.length,0);setDraft(imported);setImportMessage(count===0?"Revise o formato: não encontrei novos exercícios.":"Plano interpretado. Revise antes de salvar.");}}>Organizar texto</button>{importMessage&&<small>{importMessage}</small>}</div><button className="primary" onClick={()=>onSave(draft)}>Salvar treino</button></div></div>;
 }
 
 function canonicalClassDay(value: string) {
@@ -514,6 +554,6 @@ function GroupClassEditor({ person, schedule, onClose, onSave }: { person:Person
 
 function Metas({ reward, vals, setVals }: { reward:(n:number,s?:string)=>void; vals:number[]; setVals:React.Dispatch<React.SetStateAction<number[]>> }) { const goals=[["Treinar 4× por semana","3 de 4",75,"↗","purple",20],["Beber 2L de água","5 de 7 dias",71,"♒","blue",10],["Dormir 8h por noite","5 de 7 dias",71,"☾","orange",10],["Devocional juntos","4 de 7 dias",57,"☼","green",15]]; const overall=Math.round(vals.reduce((sum,v,i)=>sum+(i===0?Math.min(v/4,1):Math.min(v/7,1)),0)/vals.length*100); return <><div className="page-head"><p className="eyebrow">PROGRESSO</p><h1>Metas do casal</h1><p>Pequenos passos, grandes mudanças.</p></div><div className="goal-feature"><div><Icon>◎</Icon><span><small>CONSISTÊNCIA GERAL</small><b>Vocês estão a todo vapor</b></span></div><strong>{overall}<small>%</small></strong></div><div className="tabs simple"><button className="active">Ativas</button><button>Concluídas</button></div><div className="goals">{goals.map((g,i)=><button key={String(g[0])} onClick={()=>{const limit=i===0?4:7;if(vals[i]<limit){setVals(vals.map((v,x)=>x===i?v+1:v)); reward(Number(g[5]),"Meta atualizada");}}}><span className={`goal-icon ${g[4]}`}>{g[3]}</span><span className="goal-main"><b>{g[0]}</b><small>{i===0?`${Math.min(vals[i],4)} de 4`:`${vals[i]} de 7 dias`} <em>+{g[5]} ✦</em></small><Progress value={i===0?Math.min(vals[i]/4*100,100):vals[i]/7*100} color={String(g[4])}/></span><strong>{i===0?Math.min(vals[i]/4*100,100).toFixed(0):(vals[i]/7*100).toFixed(0)}%</strong></button>)}</div><button className="outline-add">＋ Nova meta</button></> }
 
-function Espiritual({ reward, checked, setChecked }: { reward:(n:number,s?:string)=>void; checked:boolean; setChecked:React.Dispatch<React.SetStateAction<boolean>> }) { return <><div className="page-head"><p className="eyebrow">VIDA ESPIRITUAL</p><h1>Um tempo com Deus</h1><p>Para crescer juntos, um dia de cada vez.</p></div><article className="verse"><span>“</span><p>Entregue o seu caminho ao Senhor; confie nele, e ele agirá.</p><small>SALMOS 37:5</small></article><article className={`devotional ${checked?"complete":""}`}><div className="dev-head"><Icon>☼</Icon><div><p>DEVOCIONAL DE HOJE</p><h2>Vocês já fizeram?</h2></div><span>+15 ✦</span></div><div className="people-check"><div><span className="avatar">G</span><b>Gileade</b><small>Concluído ✓</small></div><div><span className="avatar pink">R</span><b>Renata</b><small>{checked?"Concluído ✓":"Pendente"}</small></div></div><button className="primary" onClick={()=>{if(!checked){setChecked(true);reward(15,"Momento espiritual concluído");}}}>{checked?"Concluído juntos ♥":"Marcar como concluído"}</button></article><div className="streak"><div><small>SEQUÊNCIA ATUAL</small><strong>12 <em>dias</em> 🔥</strong><p>Recorde de vocês: 21 dias</p></div><div className="streak-days">{"STQQSSD".split("").map((d,i)=><span className={i<5?"on":""} key={i}><small>{d}</small><b>{i<5?"✓":i+13}</b></span>)}</div></div></> }
+function Espiritual({ reward, checked, setChecked }: { reward:(n:number,s?:string)=>void; checked:boolean; setChecked:React.Dispatch<React.SetStateAction<boolean>> }) { return <><div className="page-head"><p className="eyebrow">VIDA ESPIRITUAL</p><h1>Um tempo com Deus</h1></div><article className="verse"><span>“</span><p>Entregue o seu caminho ao Senhor; confie nele, e ele agirá.</p><small>SALMOS 37:5</small></article><article className={`devotional ${checked?"complete":""}`}><div className="dev-head"><Icon>☼</Icon><div><p>DEVOCIONAL DE HOJE</p><h2>{checked?"Feito juntos":"Já fizeram hoje?"}</h2></div><span>+15 ✦</span></div><button className="primary" onClick={()=>{if(!checked){setChecked(true);reward(15,"Momento espiritual concluído");}}}>{checked?"Concluído ♥":"Marcar como concluído"}</button></article></> }
 
 function Conquistas({ coins, setCoins, setToast }: { coins:number; setCoins:React.Dispatch<React.SetStateAction<number>>; setToast:(s:string)=>void }) { const rewards=[["🍦","Sorvete juntos",300],["🎬","Noite de cinema",500],["🍣","Japonês",700]]; return <><div className="page-head"><p className="eyebrow">NOSSO PROGRESSO</p><h1>Conquistas</h1><p>Celebrem cada passo do caminho.</p></div><article className="balance"><p>SALDO DO CASAL</p><h2><span>✦</span>{coins.toLocaleString("pt-BR")}</h2><small>moedas disponíveis</small><div><span>Este mês <b>+285</b></span><span>Resgatadas <b>600</b></span></div></article><div className="section-title"><div><p>BADGES</p><h2>Conquistas recentes</h2></div><button>Ver todas</button></div><div className="badges"><div className="badge unlocked"><span>🔥</span><b>Foco total</b><small>5 dias perfeitos</small></div><div className="badge unlocked"><span>🏋️</span><b>Constância</b><small>10 treinos</small></div><div className="badge"><span>♥</span><b>Sempre juntos</b><small>18/25 atividades</small></div></div><div className="section-title"><div><p>LOJINHA</p><h2>Recompensas</h2></div></div><div className="rewards">{rewards.map(([ico,name,price])=><button key={String(name)} onClick={()=>{if(coins>=Number(price)){setCoins(v=>v-Number(price));setToast(`🎉 ${name} resgatado!`);setTimeout(()=>setToast(""),2600);}else{setToast(`Faltam ${Number(price)-coins} moedas`);setTimeout(()=>setToast(""),2600);}}}><span>{ico}</span><span><b>{name}</b><small>Momento para vocês</small></span><em>✦ {price}</em></button>)}</div></> }
