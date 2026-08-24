@@ -526,6 +526,23 @@ const exerciseGuides = [
   { names:["rosca direta"], image:"rosca-direta.jpg", tip:"Cotovelos junto ao corpo; eleve a barra sem impulsionar o tronco." },
   { names:["rosca martelo"], image:"rosca-martelo.jpg", tip:"Palmas voltadas uma para a outra e cotovelos parados durante a subida." },
   { names:["rosca alternada com halteres","rosca alternada"], image:"rosca-alternada.jpg", tip:"Suba um halter de cada vez sem girar ou inclinar o tronco." },
+  { names:["agachamento sumo","agachamento sumô"], image:"https://images.pexels.com/photos/30246175/pexels-photo-30246175.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Pés bem abertos e pontas para fora; desça mantendo o peso nos calcanhares." },
+  { names:["agachamento"], image:"https://images.pexels.com/photos/13106591/pexels-photo-13106591.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Pés na largura dos ombros; desça controlado mantendo o peito erguido." },
+  { names:["leg press"], image:"https://images.pexels.com/photos/6844939/pexels-photo-6844939.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Pés na largura dos ombros na plataforma; não trave os joelhos no topo." },
+  { names:["cadeira abdutora","abducao lateral","abdução lateral"], image:"https://images.pexels.com/photos/6539861/pexels-photo-6539861.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Empurre os joelhos (ou a perna) para fora com controle, sem impulso." },
+  { names:["cadeira extensora"], image:"https://images.pexels.com/photos/19722966/pexels-photo-19722966.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Estenda as pernas sem tirar as costas do encosto e desça devagar." },
+  { names:["cadeira"], image:"https://images.pexels.com/photos/6844939/pexels-photo-6844939.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Ajuste o banco e mantenha a postura firme durante todo o movimento." },
+  { names:["desenvolvimento"], image:"https://images.pexels.com/photos/7289370/pexels-photo-7289370.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Empurre o peso para cima sem hiperestender a lombar." },
+  { names:["elevacao de pernas","elevação de pernas"], image:"https://images.pexels.com/photos/38641936/pexels-photo-38641936.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Eleve as pernas com controle, sem balançar o corpo." },
+  { names:["elevacao lateral","elevação lateral"], image:"https://images.pexels.com/photos/29793977/pexels-photo-29793977.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Suba os braços até a linha dos ombros com os cotovelos levemente flexionados." },
+  { names:["elevacao pelvica","elevação pélvica"], image:"https://images.pexels.com/photos/31028213/pexels-photo-31028213.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Apoie a parte de cima das costas e suba o quadril contraindo o glúteo." },
+  { names:["esteira"], image:"https://images.pexels.com/photos/30704307/pexels-photo-30704307.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Mantenha um ritmo constante e postura ereta durante a corrida ou caminhada." },
+  { names:["mesa flexora"], image:"https://images.pexels.com/photos/11191177/pexels-photo-11191177.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Deitado de bruços, flexione os joelhos trazendo os calcanhares em direção ao glúteo." },
+  { names:["mobilidade"], image:"https://images.pexels.com/photos/8413737/pexels-photo-8413737.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Movimente as articulações com calma, sem forçar além do conforto." },
+  { names:["panturrilha"], image:"https://images.pexels.com/photos/13965339/pexels-photo-13965339.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Suba na ponta dos pés e desça controlado até alongar bem a panturrilha." },
+  { names:["prancha"], image:"https://images.pexels.com/photos/4047105/pexels-photo-4047105.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Corpo alinhado da cabeça aos pés, abdômen contraído durante todo o tempo." },
+  { names:["stiff"], image:"https://images.pexels.com/photos/13822300/pexels-photo-13822300.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Pernas quase retas; desça a barra rente às pernas mantendo as costas retas." },
+  { names:["abdominal na maquina","abdominal máquina"], image:"https://images.pexels.com/photos/4162548/pexels-photo-4162548.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Flexione o tronco contraindo o abdômen, sem puxar com o pescoço." },
 ];
 const normalizeExerciseName=(value:string)=>value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
 function getExerciseGuide(name:string){const normalized=normalizeExerciseName(name);return exerciseGuides.find(item=>item.names.some(alias=>normalized.includes(alias)));}
