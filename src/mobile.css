@@ -7,6 +7,7 @@ button { touch-action: manipulation; }
 .hero-head.compact h1 { font-size: 16px; line-height: 1.25; margin: 0; letter-spacing: -.25px; font-weight: 600; color: #d9dbe1; }
 .hero-head.compact .eyebrow { margin-bottom: 5px; font-size: 8px; color: #7e838f; }
 .hero-head.compact h1 span { font-size: 12px; }
+.hero-head.compact h1 span.person-name { font-size: inherit; }
 .hero-head.compact .couple { margin-top: 0; }
 .hero-head.compact .couple span { width: 28px; height: 28px; font-size: 10px; }
 
@@ -324,7 +325,7 @@ button { touch-action: manipulation; }
 .app-shell.edge-dragging .content:not(.underlay-screen), .app-shell.edge-dragging .overlay-stack { transition:none; }
 .app-shell.edge-moving:not(.edge-modal-mode) .content:not(.underlay-screen) { transform:translate3d(var(--edge-swipe,0),0,0); }
 .app-shell.edge-modal-mode.edge-moving .overlay-stack { transform:translate3d(var(--edge-swipe,0),0,0); }
-.underlay-screen { pointer-events:none; transform:translate3d(calc((var(--edge-progress,0) - 1) * 28%),0,0); transition:transform .17s cubic-bezier(.2,.8,.25,1); }
+.underlay-screen { position:absolute; inset:0; z-index:0; pointer-events:none; transform:translate3d(calc((var(--edge-progress,0) - 1) * 28%),0,0); transition:transform .17s cubic-bezier(.2,.8,.25,1); }
 .app-shell.edge-dragging .underlay-screen { transition:none; }
 .app-shell::after { content:""; position:fixed; z-index:9998; inset:0 100% 0 auto; width:min(var(--edge-swipe,0px),90px); background:linear-gradient(90deg,#0008,transparent); pointer-events:none; }
 
