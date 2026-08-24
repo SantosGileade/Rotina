@@ -526,23 +526,6 @@ const exerciseGuides = [
   { names:["rosca direta"], image:"rosca-direta.jpg", tip:"Cotovelos junto ao corpo; eleve a barra sem impulsionar o tronco." },
   { names:["rosca martelo"], image:"rosca-martelo.jpg", tip:"Palmas voltadas uma para a outra e cotovelos parados durante a subida." },
   { names:["rosca alternada com halteres","rosca alternada"], image:"rosca-alternada.jpg", tip:"Suba um halter de cada vez sem girar ou inclinar o tronco." },
-  { names:["agachamento"], image:"https://wger.de/media/exercise-images/1801/60043328-1cfb-4289-9865-aaf64d5aaa28.jpg", tip:"Pés na largura dos ombros; desça controlado mantendo o peito erguido." },
-  { names:["bulgaro","búlgaro"], image:"https://wger.de/media/exercise-images/988/6283b258-a4d7-4833-84f7-a38987022d3d.png", tip:"Pé de trás apoiado no banco; desça na perna da frente sem encostar o joelho no chão." },
-  { names:["leg press"], image:"https://wger.de/media/exercise-images/371/d2136f96-3a43-4d4c-9944-1919c4ca1ce1.webp", tip:"Pés na largura dos ombros na plataforma; não trave os joelhos no topo." },
-  { names:["cadeira abdutora","abducao lateral","abdução lateral"], image:"https://wger.de/media/exercise-images/1748/923a3ff7-c269-49bd-9f03-697151a40f06.jpg", tip:"Empurre os joelhos (ou a perna) para fora com controle, sem impulso." },
-  { names:["cadeira extensora"], image:"https://wger.de/media/exercise-images/369/4d621b17-f6cb-4107-97c0-9f44e9a2dbc6.webp", tip:"Estenda as pernas sem tirar as costas do encosto e desça devagar." },
-  { names:["cadeira"], image:"https://wger.de/media/exercise-images/371/d2136f96-3a43-4d4c-9944-1919c4ca1ce1.webp", tip:"Ajuste o banco e mantenha a postura firme durante todo o movimento." },
-  { names:["coice na polia","coice"], image:"https://wger.de/media/exercise-images/990/de20457c-914a-45c9-8cf9-0ad9739759a1.png", tip:"Tronco levemente inclinado; leve a perna para trás sem arquear as costas." },
-  { names:["desenvolvimento"], image:"https://wger.de/media/exercise-images/119/seated-barbell-shoulder-press-large-1.png", tip:"Empurre o peso para cima sem hiperestender a lombar." },
-  { names:["elevacao de pernas","elevação de pernas"], image:"https://wger.de/media/exercise-images/125/Leg-raises-2.png", tip:"Eleve as pernas com controle, sem balançar o corpo." },
-  { names:["elevacao lateral","elevação lateral"], image:"https://wger.de/media/exercise-images/148/lateral-dumbbell-raises-large-2.png", tip:"Suba os braços até a linha dos ombros com os cotovelos levemente flexionados." },
-  { names:["elevacao pelvica","elevação pélvica"], image:"https://wger.de/media/exercise-images/1642/a81ad922-caf5-47f8-99b4-640cb0717436.webp", tip:"Apoie a parte de cima das costas e suba o quadril contraindo o glúteo." },
-  { names:["esteira"], image:"https://wger.de/media/exercise-images/1615/7792295c-83b6-4ea8-9353-ce02f0ad2559.jpg", tip:"Mantenha um ritmo constante e postura ereta durante a corrida ou caminhada." },
-  { names:["mesa flexora"], image:"https://wger.de/media/exercise-images/364/b318dde9-f5f2-489f-940a-cd864affb9e3.png", tip:"Deitado de bruços, flexione os joelhos trazendo os calcanhares em direção ao glúteo." },
-  { names:["panturrilha"], image:"https://wger.de/media/exercise-images/622/9a429bd0-afd3-4ad0-8043-e9beec901c81.jpeg", tip:"Suba na ponta dos pés e desça controlado até alongar bem a panturrilha." },
-  { names:["prancha"], image:"https://wger.de/media/exercise-images/458/b7bd9c28-9f1d-4647-bd17-ab6a3adf5770.png", tip:"Corpo alinhado da cabeça aos pés, abdômen contraído durante todo o tempo." },
-  { names:["stiff"], image:"https://wger.de/media/exercise-images/1652/0306c8c0-70cc-45d4-92de-6fa72ceaa834.webp", tip:"Pernas quase retas; desça a barra rente às pernas mantendo as costas retas." },
-  { names:["abdominal na maquina","abdominal máquina"], image:"https://wger.de/media/exercise-images/91/Crunches-1.png", tip:"Flexione o tronco contraindo o abdômen, sem puxar com o pescoço." },
 ];
 const normalizeExerciseName=(value:string)=>value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
 function getExerciseGuide(name:string){const normalized=normalizeExerciseName(name);return exerciseGuides.find(item=>item.names.some(alias=>normalized.includes(alias)));}
