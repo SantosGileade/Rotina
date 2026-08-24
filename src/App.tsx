@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ensureAnonymousSession, supabaseConfigured } from "./supabase";
-import { currentHousehold, excludeTaskForToday, finishWorkout, finishWorkoutForDate, insertTask, loadRotina, pairHousehold, removeTaskRecord, saveClasses, saveWorkoutPlan, setTaskDone, updateExerciseWeight } from "./database";
+import { currentHousehold, excludeTaskForToday, finishWorkout, finishWorkoutForDate, insertTask, loadRotina, pairHousehold, redeemReward, removeTaskRecord, saveClasses, saveRewards, saveWorkoutPlan, seedDefaultRewards, setTaskDone, updateExerciseWeight } from "./database";
 
 type Screen = "resumo" | "hoje" | "treino" | "metas" | "espiritual" | "conquistas";
 type Person = "gileade" | "renata";
@@ -11,6 +11,7 @@ type WorkoutDay = { title: string; muscles: string; duration: number; exercises:
 type WeeklyPlan = Record<number, WorkoutDay>;
 type GroupClass = { id: string; day: string; name: string; time: string };
 type GroupSchedule = Record<Person, GroupClass[]>;
+type Reward = { id: string; icon: string; name: string; price: number };
 
 const Icon = ({ children }: { children: React.ReactNode }) => <span className="icon">{children}</span>;
 const Progress = ({ value, color = "purple" }: { value: number; color?: string }) => (
@@ -31,6 +32,19 @@ const defaultGroupClasses: GroupSchedule = {
   gileade: [{ id:"g-1", day: "Sexta-feira", name: "Muay Thai", time: "18:30" }, { id:"g-2", day: "Sábado", name: "Funcional", time: "09:00" }],
   renata: [{ id:"r-1", day: "Sexta-feira", name: "Pilates", time: "17:30" }, { id:"r-2", day: "Sábado", name: "Fit Dance", time: "10:00" }],
 };
+
+const defaultRewards: Array<{ icon: string; name: string; price: number }> = [
+  { icon: "☕", name: "Café especial", price: 250 },
+  { icon: "🍦", name: "Sorvete juntos", price: 400 },
+  { icon: "🎬", name: "Noite de cinema em casa", price: 600 },
+  { icon: "🍣", name: "Japonês", price: 900 },
+  { icon: "🎳", name: "Programa de lazer fora", price: 1200 },
+  { icon: "💆", name: "Dia de spa a dois", price: 1600 },
+  { icon: "🍽️", name: "Jantar especial fora", price: 2000 },
+  { icon: "🏖️", name: "Passeio de um dia", price: 2600 },
+  { icon: "🎁", name: "Presente surpresa", price: 3200 },
+  { icon: "✈️", name: "Escapada de fim de semana", price: 5000 },
+];
 
 let celebrationAudio: AudioContext | null = null;
 function playCelebrationSound() {
@@ -128,6 +142,10 @@ export default function Home() {
   const [editingWorkout, setEditingWorkout] = useState<number | null>(null);
   const [editingClasses, setEditingClasses] = useState(false);
   const [honorDay, setHonorDay] = useState<number | null>(null);
+  const [rewards, setRewards] = useState<Reward[]>([]);
+  const [editingRewards, setEditingRewards] = useState(false);
+  const [redeemingReward, setRedeemingReward] = useState<Reward | null>(null);
+  const [celebratingRedeem, setCelebratingRedeem] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const [weeklyPlans, setWeeklyPlans] = useState<Record<Person,WeeklyPlan>>(() => {
     try { const saved=JSON.parse(localStorage.getItem("rotina-weekly-plans")||"null");return saved||{gileade:defaultWeeklyPlan,renata:defaultWeeklyPlan}; }
@@ -155,7 +173,8 @@ export default function Home() {
 
   function showDatabaseError(error:unknown){const message=error instanceof Error?error.message:typeof error==="object"&&error!==null&&"message" in error?String(error.message):"Não foi possível sincronizar com o Supabase.";setToast(`Erro: ${message}`);window.setTimeout(()=>setToast(""),4200);}
 
-  async function hydrate(household:string){
+  async function hydrate(household:string, userIdOverride?:string){
+    const userId=userIdOverride||databaseUserId;
     const data=await loadRotina(household);
     const completionMap:Record<string,Person[]>={};
     data.completions.forEach((item:any)=>{completionMap[item.task_id]=[...(completionMap[item.task_id]||[]),item.person as Person];});
@@ -166,7 +185,7 @@ export default function Home() {
     const plans:Record<Person,WeeklyPlan>={gileade:structuredClone(defaultWeeklyPlan),renata:structuredClone(defaultWeeklyPlan)};
     const ids:Record<Person,Record<number,string>>={gileade:{},renata:{}};
     for(const row of data.days as any[]){const owner=row.person as Person;ids[owner][row.day_of_week]=row.id;plans[owner][row.day_of_week]={title:row.title,muscles:row.muscles,duration:row.duration_minutes,exercises:(data.exercises as any[]).filter(item=>item.workout_day_id===row.id).map(item=>({id:item.id,name:item.name,sets:item.sets,reps:item.reps,muscle:item.muscle,weight:Number(item.weight)}))};}
-    if(!(data.days as any[]).length){await Promise.all([saveWorkoutPlan(household,"gileade",defaultWeeklyPlan),saveWorkoutPlan(household,"renata",defaultWeeklyPlan),saveClasses(household,"gileade",defaultGroupClasses.gileade),saveClasses(household,"renata",defaultGroupClasses.renata)]);return hydrate(household);}
+    if(!(data.days as any[]).length||!(data.rewards as any[]).length){const seeds:Promise<unknown>[]=[];if(!(data.days as any[]).length)seeds.push(saveWorkoutPlan(household,"gileade",defaultWeeklyPlan),saveWorkoutPlan(household,"renata",defaultWeeklyPlan),saveClasses(household,"gileade",defaultGroupClasses.gileade),saveClasses(household,"renata",defaultGroupClasses.renata));if(!(data.rewards as any[]).length)seeds.push(seedDefaultRewards(household,userId,defaultRewards));await Promise.all(seeds);return hydrate(household,userId);}
     setWeeklyPlans(plans);setWorkoutDayIds(ids);localStorage.setItem("rotina-weekly-plans",JSON.stringify(plans));
     const schedules:GroupSchedule={gileade:[],renata:[]};const dayNames=["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"];
     (data.classes as any[]).forEach(item=>schedules[item.person as Person].push({id:item.id,day:dayNames[item.day_of_week],name:item.name,time:item.class_time.slice(0,5)}));setGroupSchedule(schedules);localStorage.setItem("rotina-group-classes",JSON.stringify(schedules));
@@ -175,10 +194,11 @@ export default function Home() {
     const trained:Record<Person,number[]>={gileade:[],renata:[]};
     (data.sessions as any[]).forEach(item=>{const owner=item.person as Person;const weekday=new Date(`${item.completion_date}T12:00:00`).getDay();if(!trained[owner].includes(weekday))trained[owner].push(weekday);});
     setTrainedWorkoutDays(trained);
+    setRewards((data.rewards as any[]).map(item=>({id:item.id,icon:item.icon,name:item.name,price:Number(item.price)})));
     setDatabaseState("ready");
   }
 
-  useEffect(()=>{void(async()=>{try{if(!supabaseConfigured)throw new Error("As variáveis do Supabase não foram configuradas.");const user=await ensureAnonymousSession();setDatabaseUserId(user.id);const existingHousehold=await currentHousehold();const household=existingHousehold||await pairHousehold("rotina-gileade-renata-2026");setHouseholdId(household);await hydrate(household);}catch(error){const message=error instanceof Error?error.message:typeof error==="object"&&error!==null&&"message" in error?String(error.message):"Falha ao conectar ao Supabase.";setDatabaseError(message);setDatabaseState("error");}})();},[]);
+  useEffect(()=>{void(async()=>{try{if(!supabaseConfigured)throw new Error("As variáveis do Supabase não foram configuradas.");const user=await ensureAnonymousSession();setDatabaseUserId(user.id);const existingHousehold=await currentHousehold();const household=existingHousehold||await pairHousehold("rotina-gileade-renata-2026");setHouseholdId(household);await hydrate(household,user.id);}catch(error){const message=error instanceof Error?error.message:typeof error==="object"&&error!==null&&"message" in error?String(error.message):"Falha ao conectar ao Supabase.";setDatabaseError(message);setDatabaseState("error");}})();},[]);
   useEffect(()=>{if(databaseState!=="ready"||!householdId)return;const refresh=()=>{if(document.visibilityState==="visible")void hydrate(householdId).catch(showDatabaseError);};window.addEventListener("focus",refresh);document.addEventListener("visibilitychange",refresh);return()=>{window.removeEventListener("focus",refresh);document.removeEventListener("visibilitychange",refresh);};},[databaseState,householdId]);
 
   useEffect(() => {
@@ -284,6 +304,21 @@ export default function Home() {
     }).catch(showDatabaseError);
   };
 
+  const saveRewardsList = (next: Array<{ icon:string; name:string; price:number }>) => {
+    if (!householdId) return;
+    void saveRewards(householdId, databaseUserId, next).then(() => hydrate(householdId)).catch(showDatabaseError);
+  };
+
+  const confirmRedeem = (target: Reward) => {
+    void redeemReward(target.id).then(() => {
+      setCoins(v => Math.max(0, v - target.price));
+      playCelebrationSound();
+      setCelebratingRedeem(true);
+      window.setTimeout(() => setCelebratingRedeem(false), 3200);
+      window.setTimeout(() => setRedeemingReward(null), 1300);
+    }).catch(error => { showDatabaseError(error); setRedeemingReward(null); });
+  };
+
   const goBack = () => {
     if (exerciseOpen) return setExerciseOpen(false);
     if (workout) return setWorkout(false);
@@ -291,13 +326,15 @@ export default function Home() {
     if (editingWorkout !== null) return setEditingWorkout(null);
     if (editingClasses) return setEditingClasses(false);
     if (honorDay !== null) return setHonorDay(null);
+    if (redeemingReward) return setRedeemingReward(null);
+    if (editingRewards) return setEditingRewards(false);
     if (menuOpen) return setMenuOpen(false);
     if (screenHistory.current.length > 1) screenHistory.current.pop();
     navigate(screenHistory.current.at(-1) || "resumo", true);
   };
 
   const startEdgeSwipe = (event: React.PointerEvent) => {
-    const canGoBack=screenHistory.current.length>1||exerciseOpen||workout||addingTask||editingWorkout!==null||editingClasses||honorDay!==null||menuOpen;
+    const canGoBack=screenHistory.current.length>1||exerciseOpen||workout||addingTask||editingWorkout!==null||editingClasses||honorDay!==null||redeemingReward!==null||editingRewards||menuOpen;
     edgeSwipe.current = { active: canGoBack&&event.clientX <= 24, startX: event.clientX, startY: event.clientY };
     if(edgeSwipe.current.active)setSwipeDragging(true);
   };
@@ -333,7 +370,7 @@ export default function Home() {
         {screen === "treino" && workout && <WorkoutMode plan={weeklyPlan[workoutDay]} activeExercise={activeExercise} completed={completedExercises} series={series} rest={rest} ready={exerciseReady} onSeries={concludeSeries} onRestDone={()=>setRest(0)} onChoose={(index) => { const current=weeklyPlan[workoutDay].exercises[activeExercise]; setExerciseProgress(progress=>({...progress,[current.id]:{series,ready:exerciseReady}})); const target=exerciseProgress[weeklyPlan[workoutDay].exercises[index].id]; setActiveExercise(index); setSeries(target?.series||1); setRest(0); setExerciseReady(target?.ready||false); }} onWeight={changeWeight} />}
         {screen === "metas" && <Metas reward={reward} vals={goalValues} setVals={setGoalValues} />}
         {screen === "espiritual" && <Espiritual reward={reward} checked={spiritualDone} setChecked={setSpiritualDone} />}
-        {screen === "conquistas" && <Conquistas coins={coins} setCoins={setCoins} setToast={setToast} />}
+        {screen === "conquistas" && <Conquistas coins={coins} rewards={rewards} onRedeemRequest={(item)=>setRedeemingReward(item)} onEditRewards={()=>setEditingRewards(true)} />}
       </section>
 
       {!workout && <nav className="bottom-nav">
@@ -347,6 +384,9 @@ export default function Home() {
       {editingWorkout !== null && <WorkoutEditor day={editingWorkout} plan={weeklyPlan} onClose={() => setEditingWorkout(null)} onSave={(next) => { saveWeeklyPlan(next); setEditingWorkout(null); }} />}
       {editingClasses && <GroupClassEditor person={person} schedule={groupSchedule} onClose={() => setEditingClasses(false)} onSave={(next) => { saveGroupSchedule(next); setEditingClasses(false); }} />}
       {honorDay !== null && <WorkoutHonorModal day={honorDay} onClose={() => setHonorDay(null)} onConfirm={() => confirmHonorWorkout(honorDay)} />}
+      {editingRewards && <RewardEditor rewards={rewards} onClose={() => setEditingRewards(false)} onSave={(next) => { saveRewardsList(next); setEditingRewards(false); }} />}
+      {redeemingReward && <RewardTicketModal reward={redeemingReward} coins={coins} onClose={() => setRedeemingReward(null)} onConfirm={() => confirmRedeem(redeemingReward)} />}
+      {celebratingRedeem && <Confetti />}
       {toast && <div className={`toast ${toast.startsWith("+") ? "success" : ""}`}><span>✦</span>{toast}</div>}
     </main>
   );
@@ -581,4 +621,40 @@ function Metas({ reward, vals, setVals }: { reward:(n:number,s?:string)=>void; v
 
 function Espiritual({ reward, checked, setChecked }: { reward:(n:number,s?:string)=>void; checked:boolean; setChecked:React.Dispatch<React.SetStateAction<boolean>> }) { return <><div className="page-head"><p className="eyebrow">VIDA ESPIRITUAL</p><h1>Um tempo com Deus</h1></div><article className="verse"><span>“</span><p>Entregue o seu caminho ao Senhor; confie nele, e ele agirá.</p><small>SALMOS 37:5</small></article><article className={`devotional ${checked?"complete":""}`}><div className="dev-head"><Icon>☼</Icon><div><p>DEVOCIONAL DE HOJE</p><h2>{checked?"Feito juntos":"Já fizeram hoje?"}</h2></div><span>+15 ✦</span></div><button className="primary" onClick={()=>{if(!checked){setChecked(true);reward(15,"Momento espiritual concluído");}}}>{checked?"Concluído ♥":"Marcar como concluído"}</button></article></> }
 
-function Conquistas({ coins, setCoins, setToast }: { coins:number; setCoins:React.Dispatch<React.SetStateAction<number>>; setToast:(s:string)=>void }) { const rewards=[["🍦","Sorvete juntos",300],["🎬","Noite de cinema",500],["🍣","Japonês",700]]; return <><div className="page-head"><p className="eyebrow">NOSSO PROGRESSO</p><h1>Conquistas</h1><p>Celebrem cada passo do caminho.</p></div><article className="balance"><p>SALDO DO CASAL</p><h2><span>✦</span>{coins.toLocaleString("pt-BR")}</h2><small>moedas disponíveis</small><div><span>Este mês <b>+285</b></span><span>Resgatadas <b>600</b></span></div></article><div className="section-title"><div><p>BADGES</p><h2>Conquistas recentes</h2></div><button>Ver todas</button></div><div className="badges"><div className="badge unlocked"><span>🔥</span><b>Foco total</b><small>5 dias perfeitos</small></div><div className="badge unlocked"><span>🏋️</span><b>Constância</b><small>10 treinos</small></div><div className="badge"><span>♥</span><b>Sempre juntos</b><small>18/25 atividades</small></div></div><div className="section-title"><div><p>LOJINHA</p><h2>Recompensas</h2></div></div><div className="rewards">{rewards.map(([ico,name,price])=><button key={String(name)} onClick={()=>{if(coins>=Number(price)){setCoins(v=>v-Number(price));setToast(`🎉 ${name} resgatado!`);setTimeout(()=>setToast(""),2600);}else{setToast(`Faltam ${Number(price)-coins} moedas`);setTimeout(()=>setToast(""),2600);}}}><span>{ico}</span><span><b>{name}</b><small>Momento para vocês</small></span><em>✦ {price}</em></button>)}</div></> }
+function Conquistas({ coins, rewards, onRedeemRequest, onEditRewards }: { coins:number; rewards:Reward[]; onRedeemRequest:(reward:Reward)=>void; onEditRewards:()=>void }) { return <><div className="page-head"><p className="eyebrow">NOSSO PROGRESSO</p><h1>Conquistas</h1><p>Celebrem cada passo do caminho.</p></div><article className="balance"><p>SALDO DO CASAL</p><h2><span>✦</span>{coins.toLocaleString("pt-BR")}</h2><small>moedas disponíveis</small></article><div className="section-title"><div><p>BADGES</p><h2>Conquistas recentes</h2></div><button>Ver todas</button></div><div className="badges"><div className="badge unlocked"><span>🔥</span><b>Foco total</b><small>5 dias perfeitos</small></div><div className="badge unlocked"><span>🏋️</span><b>Constância</b><small>10 treinos</small></div><div className="badge"><span>♥</span><b>Sempre juntos</b><small>18/25 atividades</small></div></div><div className="section-title"><div><p>LOJINHA</p><h2>Recompensas</h2></div><button onClick={onEditRewards}>Editar</button></div><div className="rewards">{rewards.length?rewards.map(item=><button key={item.id} onClick={()=>onRedeemRequest(item)}><span>{item.icon}</span><span><b>{item.name}</b><small>Momento para vocês</small></span><em>✦ {item.price.toLocaleString("pt-BR")}</em></button>):<div className="empty-workout">Nenhuma recompensa cadastrada. Toque em Editar para adicionar.</div>}</div></> }
+
+function RewardEditor({ rewards, onClose, onSave }: { rewards:Reward[]; onClose:()=>void; onSave:(next:Array<{icon:string;name:string;price:number}>)=>void }) {
+  const [draft,setDraft]=useState<Array<{icon:string;name:string;price:number}>>(()=>rewards.map(({icon,name,price})=>({icon,name,price})));
+  const update=(index:number,field:"icon"|"name"|"price",value:string|number)=>setDraft(current=>current.map((item,itemIndex)=>itemIndex===index?{...item,[field]:value}:item));
+  const addReward=()=>setDraft(current=>[...current,{icon:"🎁",name:"Nova recompensa",price:100}]);
+  return <div className="modal"><div className="sheet workout-editor reward-editor"><button className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">LOJINHA</p><h1>Editar recompensas</h1><div className="editor-exercises">{draft.map((item,index)=><article key={index}><div className="reward-editor-row"><input aria-label="Ícone da recompensa" className="reward-icon-input" value={item.icon} onChange={event=>update(index,"icon",event.target.value)} maxLength={4}/><input aria-label="Nome da recompensa" value={item.name} onChange={event=>update(index,"name",event.target.value)}/></div><label>Preço em moedas<input type="number" min="1" value={item.price} onChange={event=>update(index,"price",Number(event.target.value))}/></label><button className="remove-exercise" aria-label={`Remover ${item.name}`} onClick={()=>setDraft(current=>current.filter((_,itemIndex)=>itemIndex!==index))}>×</button></article>)}</div><button className="outline-add" onClick={addReward}>＋ Adicionar recompensa</button><button className="primary" onClick={()=>onSave(draft)}>Salvar recompensas</button></div></div>;
+}
+
+function RewardTicketModal({ reward, coins, onClose, onConfirm }: { reward:Reward; coins:number; onClose:()=>void; onConfirm:()=>void }) {
+  const canAfford = coins >= reward.price;
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [torn, setTorn] = useState(false);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const startX = useRef(0);
+  const HANDLE = 46;
+  const down = (event: React.PointerEvent) => { if (torn || !canAfford) return; setDragging(true); startX.current = event.clientX - dragX; event.currentTarget.setPointerCapture(event.pointerId); };
+  const move = (event: React.PointerEvent) => {
+    if (!dragging || torn) return;
+    const track = trackRef.current; if (!track) return;
+    const max = Math.max(1, track.clientWidth - HANDLE);
+    const next = Math.max(0, Math.min(max, event.clientX - startX.current));
+    setDragX(next);
+    if (next >= max * 0.9) { setDragging(false); setTorn(true); onConfirm(); }
+  };
+  const up = () => { setDragging(false); if (!torn) setDragX(0); };
+  return <div className="modal ticket-modal"><div className={`ticket ${torn?"torn":""}`}>
+    <button className="sheet-close" onClick={onClose}>×</button>
+    <div className="ticket-half ticket-top"><span className="ticket-icon">{reward.icon}</span><h1>{reward.name}</h1><p>Momento para vocês</p></div>
+    <div className="ticket-perforation">{Array.from({length:14},(_,i)=><i key={i}/>)}</div>
+    <div className="ticket-half ticket-bottom">
+      <div className="ticket-price"><span>✦</span>{reward.price.toLocaleString("pt-BR")} moedas</div>
+      {canAfford ? <div className="ticket-slider" ref={trackRef}><span className="ticket-slider-label">{torn?"Resgatado! ✓":"Arraste para cortar →"}</span><button type="button" className="ticket-slider-handle" style={{transform:`translateX(${dragX}px)`}} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} disabled={torn}>✂️</button></div> : <p className="ticket-warning">Faltam {(reward.price-coins).toLocaleString("pt-BR")} moedas para essa recompensa</p>}
+    </div>
+  </div></div>;
+}

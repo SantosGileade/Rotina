@@ -18,7 +18,7 @@ export async function pairHousehold(code:string) {
 
 export async function loadRotina(householdId:string) {
   const today=localDate();
-  const [tasks,completions,exclusions,days,exercises,classes,sessions,balance]=await Promise.all([
+  const [tasks,completions,exclusions,days,exercises,classes,sessions,balance,rewards]=await Promise.all([
     supabase.from("tasks").select("*").eq("household_id",householdId).or(`task_date.eq.${today},recurring.eq.true`).order("created_at"),
     supabase.from("daily_task_completions").select("task_id,person,completed_at").eq("completed_date",today),
     supabase.from("task_exclusions").select("task_id").eq("excluded_date",today),
@@ -27,10 +27,11 @@ export async function loadRotina(householdId:string) {
     supabase.from("group_classes").select("*").eq("household_id",householdId).order("day_of_week").order("position"),
     supabase.from("workout_sessions").select("person,completion_date").eq("household_id",householdId).gte("completion_date",startOfWeek()),
     supabase.from("household_balances").select("balance").eq("household_id",householdId).maybeSingle(),
+    supabase.from("rewards").select("*").eq("household_id",householdId).order("price"),
   ]);
-  const failed=[tasks,completions,exclusions,days,exercises,classes,sessions,balance].find(result=>result.error);
+  const failed=[tasks,completions,exclusions,days,exercises,classes,sessions,balance,rewards].find(result=>result.error);
   if(failed?.error)throw failed.error;
-  return {tasks:tasks.data||[],completions:completions.data||[],exclusions:exclusions.data||[],days:days.data||[],exercises:exercises.data||[],classes:classes.data||[],sessions:sessions.data||[],balance:Number(balance.data?.balance||0)};
+  return {tasks:tasks.data||[],completions:completions.data||[],exclusions:exclusions.data||[],days:days.data||[],exercises:exercises.data||[],classes:classes.data||[],sessions:sessions.data||[],balance:Number(balance.data?.balance||0),rewards:rewards.data||[]};
 }
 
 export async function insertTask(householdId:string,userId:string,task:{title:string;category:string;difficulty:"easy"|"medium"|"hard";coin_reward:number;assignment:"gileade"|"renata"|"both";task_time:string|null;recurring:boolean}) {
@@ -62,6 +63,19 @@ export async function updateExerciseWeight(exerciseId:string,weight:number){
   const {error}=await supabase.from("workout_exercises").update({weight,updated_at:new Date().toISOString()}).eq("id",exerciseId);
   if(error)throw error;
 }
+
+export async function seedDefaultRewards(householdId:string,userId:string,rewards:Array<{icon:string;name:string;price:number}>){
+  const {error}=await supabase.from("rewards").upsert(rewards.map(item=>({...item,household_id:householdId,created_by:userId})),{onConflict:"household_id,name",ignoreDuplicates:true});
+  if(error)throw error;
+}
+
+export async function saveRewards(householdId:string,userId:string,rewards:Array<{icon:string;name:string;price:number}>){
+  const {error:deleteError}=await supabase.from("rewards").delete().eq("household_id",householdId);
+  if(deleteError)throw deleteError;
+  if(rewards.length){const {error}=await supabase.from("rewards").insert(rewards.map(item=>({...item,household_id:householdId,created_by:userId})));if(error)throw error;}
+}
+
+export async function redeemReward(id:string){const {error}=await supabase.rpc("redeem_reward",{target_reward:id});if(error)throw error;}
 
 export async function finishWorkout(dayId:string,person:DbPerson){const {data,error}=await supabase.rpc("finish_workout",{target_workout_day:dayId,target_person:person});if(error)throw error;return Boolean(data);}
 export async function finishWorkoutForDate(dayId:string,person:DbPerson,date:string){const {data,error}=await supabase.rpc("finish_workout_for_date",{target_workout_day:dayId,target_person:person,target_date:date});if(error)throw error;return Boolean(data);}
