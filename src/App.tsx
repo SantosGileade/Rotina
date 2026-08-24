@@ -332,6 +332,9 @@ export default function Home() {
     navigate(screenHistory.current.at(-1) || "resumo", true);
   };
 
+  const overlayOpen = exerciseOpen||addingTask||editingWorkout!==null||editingClasses||honorDay!==null||redeemingReward!==null||editingRewards||menuOpen;
+  const backTarget: Screen = workout ? screen : (screenHistory.current.length>1 ? screenHistory.current[screenHistory.current.length-2] as Screen : "resumo");
+
   const startEdgeSwipe = (event: React.PointerEvent) => {
     const canGoBack=screenHistory.current.length>1||exerciseOpen||workout||addingTask||editingWorkout!==null||editingClasses||honorDay!==null||redeemingReward!==null||editingRewards||menuOpen;
     edgeSwipe.current = { active: canGoBack&&event.clientX <= 24, startX: event.clientX, startY: event.clientY };
@@ -353,8 +356,17 @@ export default function Home() {
 
   if(databaseState!=="ready")return <DatabaseGate state={databaseState} error={databaseError}/>;
 
+  const renderScreen = (target: Screen, workoutActive: boolean, underlay: boolean) => <>
+    {target === "resumo" && <Resumo now={now} greeting={greeting} done={done} total={visibleTasks.length} workoutDone={workoutDone} workoutProgress={(series - 1) / 4 * 100} spiritualDone={spiritualDone} person={person} classes={groupSchedule[person]} celebrateRequested={!underlay && summaryCelebrationPending} onCelebrated={()=>{const key=`rotina-summary-complete-${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`;localStorage.setItem(key,"true");setSummaryCelebrationPending(false);}} onGo={navigate} />}
+    {target === "hoje" && <Hoje now={now} tasks={visibleTasks} toggle={toggleTask} remove={(id) => {const task=tasks.find(t=>t.id===id);setTasks(current=>current.filter(task=>task.id!==id));if(task?.recurring)void excludeTaskForToday(id).catch(showDatabaseError);else void removeTaskRecord(id).catch(showDatabaseError);}} done={done} onAdd={() => setAddingTask(true)} />}
+    {target === "treino" && !workoutActive && <Treino now={now} person={person} plan={weeklyPlan} classes={groupSchedule[person]} selectedDay={workoutDay} workoutDone={workoutDone} trainedDays={trainedWorkoutDays[person]} onSelectDay={setWorkoutDay} onDetail={() => setExerciseOpen(true)} onStart={startWorkout} onEdit={() => setEditingWorkout(workoutDay)} onEditClasses={() => setEditingClasses(true)} onMarkDone={(day) => setHonorDay(day)} />}
+    {target === "treino" && workoutActive && <WorkoutMode plan={weeklyPlan[workoutDay]} activeExercise={activeExercise} completed={completedExercises} series={series} rest={rest} ready={exerciseReady} onSeries={concludeSeries} onRestDone={()=>setRest(0)} onChoose={(index) => { const current=weeklyPlan[workoutDay].exercises[activeExercise]; setExerciseProgress(progress=>({...progress,[current.id]:{series,ready:exerciseReady}})); const target=exerciseProgress[weeklyPlan[workoutDay].exercises[index].id]; setActiveExercise(index); setSeries(target?.series||1); setRest(0); setExerciseReady(target?.ready||false); }} onWeight={changeWeight} />}
+    {target === "espiritual" && <Espiritual reward={reward} checked={spiritualDone} setChecked={setSpiritualDone} />}
+    {target === "conquistas" && <Conquistas coins={coins} rewards={rewards} onRedeemRequest={(item)=>setRedeemingReward(item)} onEditRewards={()=>setEditingRewards(true)} />}
+  </>;
+
   return (
-    <main className={`app-shell ${swipeOffset>0?"edge-moving":""} ${swipeDragging?"edge-dragging":""}`} style={{"--edge-swipe":`${swipeOffset}px`} as React.CSSProperties} onPointerDown={startEdgeSwipe} onPointerMove={moveEdgeSwipe} onPointerUp={endEdgeSwipe} onPointerCancel={endEdgeSwipe}>
+    <main className={`app-shell ${swipeOffset>0?"edge-moving":""} ${swipeDragging?"edge-dragging":""} ${overlayOpen?"edge-modal-mode":""}`} style={{"--edge-swipe":`${swipeOffset}px`} as React.CSSProperties} onPointerDown={startEdgeSwipe} onPointerMove={moveEdgeSwipe} onPointerUp={endEdgeSwipe} onPointerCancel={endEdgeSwipe}>
       <div className="ambient one" /><div className="ambient two" />
       <header className={`topbar ${screen === "hoje" || screen === "treino" ? "today-topbar" : ""} ${workout?"workout-topbar":""}`}>
         {screen !== "hoje" && screen !== "treino" && <div className="brand-group"><button className="menu-trigger" onClick={() => setMenuOpen(true)} aria-label="Abrir configurações"><i/><i/><i/></button><button className="brand text-brand" onClick={() => navigate("resumo")}>Rotina</button></div>}
@@ -362,13 +374,9 @@ export default function Home() {
         <button className="coin-pill" onClick={() => navigate("conquistas")}><Icon>✦</Icon><b>{coins}</b><small> moedas</small></button>
       </header>
 
+      {!overlayOpen && (swipeDragging||swipeOffset>0) && <section className="content underlay-screen" aria-hidden="true">{renderScreen(backTarget, false, true)}</section>}
       <section className="content" key={screen}>
-        {screen === "resumo" && <Resumo now={now} greeting={greeting} done={done} total={visibleTasks.length} workoutDone={workoutDone} workoutProgress={(series - 1) / 4 * 100} spiritualDone={spiritualDone} person={person} classes={groupSchedule[person]} celebrateRequested={summaryCelebrationPending} onCelebrated={()=>{const key=`rotina-summary-complete-${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`;localStorage.setItem(key,"true");setSummaryCelebrationPending(false);}} onGo={navigate} />}
-        {screen === "hoje" && <Hoje now={now} tasks={visibleTasks} toggle={toggleTask} remove={(id) => {const task=tasks.find(t=>t.id===id);setTasks(current=>current.filter(task=>task.id!==id));if(task?.recurring)void excludeTaskForToday(id).catch(showDatabaseError);else void removeTaskRecord(id).catch(showDatabaseError);}} done={done} onAdd={() => setAddingTask(true)} />}
-        {screen === "treino" && !workout && <Treino now={now} person={person} plan={weeklyPlan} classes={groupSchedule[person]} selectedDay={workoutDay} workoutDone={workoutDone} trainedDays={trainedWorkoutDays[person]} onSelectDay={setWorkoutDay} onDetail={() => setExerciseOpen(true)} onStart={startWorkout} onEdit={() => setEditingWorkout(workoutDay)} onEditClasses={() => setEditingClasses(true)} onMarkDone={(day) => setHonorDay(day)} />}
-        {screen === "treino" && workout && <WorkoutMode plan={weeklyPlan[workoutDay]} activeExercise={activeExercise} completed={completedExercises} series={series} rest={rest} ready={exerciseReady} onSeries={concludeSeries} onRestDone={()=>setRest(0)} onChoose={(index) => { const current=weeklyPlan[workoutDay].exercises[activeExercise]; setExerciseProgress(progress=>({...progress,[current.id]:{series,ready:exerciseReady}})); const target=exerciseProgress[weeklyPlan[workoutDay].exercises[index].id]; setActiveExercise(index); setSeries(target?.series||1); setRest(0); setExerciseReady(target?.ready||false); }} onWeight={changeWeight} />}
-        {screen === "espiritual" && <Espiritual reward={reward} checked={spiritualDone} setChecked={setSpiritualDone} />}
-        {screen === "conquistas" && <Conquistas coins={coins} rewards={rewards} onRedeemRequest={(item)=>setRedeemingReward(item)} onEditRewards={()=>setEditingRewards(true)} />}
+        {renderScreen(screen, workout, false)}
       </section>
 
       {!workout && <nav className="bottom-nav">
@@ -376,14 +384,16 @@ export default function Home() {
           ["resumo", "⌂", "Resumo"], ["hoje", "✓", "Hoje"], ["treino", "↗", "Treino"], ["conquistas", "✦", "Conquistas"],
         ] as [Screen, string, string][]).map(([id, ico, label]) => <button key={id} onClick={() => navigate(id)} className={screen === id ? "active" : ""}>{id === "treino" ? <span className="icon workout-nav-icon">↑</span> : <Icon>{ico}</Icon>}<small>{label}</small></button>)}
       </nav>}
-      {exerciseOpen && <ExerciseDetail onClose={() => setExerciseOpen(false)} />}
-      {addingTask && <AddTaskModal onClose={() => setAddingTask(false)} onAdd={addTask} />}
-      {menuOpen && <PersonMenu person={person} onSelect={selectPerson} onClose={() => setMenuOpen(false)} />}
-      {editingWorkout !== null && <WorkoutEditor day={editingWorkout} plan={weeklyPlan} onClose={() => setEditingWorkout(null)} onSave={(next) => { saveWeeklyPlan(next); setEditingWorkout(null); }} />}
-      {editingClasses && <GroupClassEditor person={person} schedule={groupSchedule} onClose={() => setEditingClasses(false)} onSave={(next) => { saveGroupSchedule(next); setEditingClasses(false); }} />}
-      {honorDay !== null && <WorkoutHonorModal day={honorDay} onClose={() => setHonorDay(null)} onConfirm={() => confirmHonorWorkout(honorDay)} />}
-      {editingRewards && <RewardEditor rewards={rewards} onClose={() => setEditingRewards(false)} onSave={(next) => { saveRewardsList(next); setEditingRewards(false); }} />}
-      {redeemingReward && <RewardTicketModal reward={redeemingReward} coins={coins} onClose={() => setRedeemingReward(null)} onConfirm={() => confirmRedeem(redeemingReward)} />}
+      <div className="overlay-stack">
+        {exerciseOpen && <ExerciseDetail onClose={() => setExerciseOpen(false)} />}
+        {addingTask && <AddTaskModal onClose={() => setAddingTask(false)} onAdd={addTask} />}
+        {menuOpen && <PersonMenu person={person} onSelect={selectPerson} onClose={() => setMenuOpen(false)} />}
+        {editingWorkout !== null && <WorkoutEditor day={editingWorkout} plan={weeklyPlan} onClose={() => setEditingWorkout(null)} onSave={(next) => { saveWeeklyPlan(next); setEditingWorkout(null); }} />}
+        {editingClasses && <GroupClassEditor person={person} schedule={groupSchedule} onClose={() => setEditingClasses(false)} onSave={(next) => { saveGroupSchedule(next); setEditingClasses(false); }} />}
+        {honorDay !== null && <WorkoutHonorModal day={honorDay} onClose={() => setHonorDay(null)} onConfirm={() => confirmHonorWorkout(honorDay)} />}
+        {editingRewards && <RewardEditor rewards={rewards} onClose={() => setEditingRewards(false)} onSave={(next) => { saveRewardsList(next); setEditingRewards(false); }} />}
+        {redeemingReward && <RewardTicketModal reward={redeemingReward} coins={coins} onClose={() => setRedeemingReward(null)} onConfirm={() => confirmRedeem(redeemingReward)} />}
+      </div>
       {celebratingRedeem && <Confetti />}
       {toast && <div className={`toast ${toast.startsWith("+") ? "success" : ""}`}><span>✦</span>{toast}</div>}
     </main>
@@ -421,7 +431,7 @@ function Resumo({ now, greeting, done, total, workoutDone, workoutProgress, spir
     return () => window.clearTimeout(start);
   }, [dayPercent, celebrateRequested]);
   return <>
-    <div className="hero-head compact"><div><p className="eyebrow">{longDate(now).toLocaleUpperCase("pt-BR")}</p><h1>{greeting}, Gileade e Renata <span>♥</span></h1></div><div className="couple"><span>G</span><span>R</span></div></div>
+    <div className="hero-head compact"><div><p className="eyebrow">{longDate(now).toLocaleUpperCase("pt-BR")}</p><h1>{greeting}, <span className={`person-name ${person==="gileade"?"active-person":""}`}>Gileade</span> e <span className={`person-name ${person==="renata"?"active-person":""}`}>Renata</span> <span>♥</span></h1></div><div className="couple"><span>G</span><span>R</span></div></div>
     <article className={`compact-focus ${focusCollapsed ? "collapsed" : ""} ${celebrating ? "celebrating" : ""}`}><button className="focus-toggle" onClick={toggleFocus} aria-label={focusCollapsed ? "Expandir foco da semana" : "Minimizar foco da semana"} aria-expanded={!focusCollapsed}><i /></button><div className="focus-copy"><small>Foco da semana</small><b>Disciplina hoje, liberdade amanhã.</b></div><div className="focus-progress-row"><span>Progresso geral do dia</span><strong>{dayPercent}%</strong></div><Progress value={animatedTaskPercent} /></article>{celebrating && <Confetti />}
     <div className="section-title summary-title"><h2>Resumo do dia</h2></div>
     <div className="stats-grid home-stats">
