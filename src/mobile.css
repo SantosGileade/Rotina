@@ -288,8 +288,9 @@ button { touch-action: manipulation; }
 .workout-mode { padding-bottom:88px; }
 .workout-mode .fixed-action { position:fixed; z-index:12; left:50%; bottom:max(10px,env(safe-area-inset-bottom)); width:min(calc(100vw - 40px),520px); margin:0; transform:translateX(-50%); box-shadow:0 -14px 34px #08090ddd,0 10px 25px #268c5a32; }
 
-.workout-editor { padding-bottom:8px; }
-.workout-editor > .primary { position:sticky; bottom:0; margin:22px 0 0; z-index:5; padding-bottom:calc(14px + env(safe-area-inset-bottom)); box-shadow:0 -18px 20px -8px #11141aee, 0 10px 25px #6d43d633; }
+.sheet.workout-editor { display:flex; flex-direction:column; overflow:hidden; padding-bottom:0; }
+.workout-editor-scroll { overflow-y:auto; flex:1 1 auto; min-height:0; }
+.workout-editor > .primary { flex:0 0 auto; margin-top:20px; padding-bottom:calc(14px + env(safe-area-inset-bottom)); }
 .workout-editor label { display:flex; flex-direction:column; gap:7px; color:#9b9faa; font-size:10px; margin-top:13px; }
 .workout-editor input,.workout-editor textarea { width:100%; min-width:0; border:1px solid #2b2f39; border-radius:12px; background:#191c23; color:#f5f5f7; padding:12px; font:inherit; font-size:12px; outline:none; }
 .workout-editor input:focus,.workout-editor textarea:focus { border-color:#805bdd; }
@@ -323,7 +324,8 @@ button { touch-action: manipulation; }
 .app-shell.edge-dragging .content:not(.underlay-screen), .app-shell.edge-dragging .overlay-stack { transition:none; }
 .app-shell.edge-moving:not(.edge-modal-mode) .content:not(.underlay-screen) { transform:translate3d(var(--edge-swipe,0),0,0); }
 .app-shell.edge-modal-mode.edge-moving .overlay-stack { transform:translate3d(var(--edge-swipe,0),0,0); }
-.underlay-screen { pointer-events:none; }
+.underlay-screen { pointer-events:none; transform:translate3d(calc((var(--edge-progress,0) - 1) * 28%),0,0); transition:transform .17s cubic-bezier(.2,.8,.25,1); }
+.app-shell.edge-dragging .underlay-screen { transition:none; }
 .app-shell::after { content:""; position:fixed; z-index:9998; inset:0 100% 0 auto; width:min(var(--edge-swipe,0px),90px); background:linear-gradient(90deg,#0008,transparent); pointer-events:none; }
 
 /* Fluid sizing from compact phones through larger PWA windows. */
