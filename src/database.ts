@@ -18,6 +18,8 @@ export async function pairHousehold(code:string) {
 
 export async function loadRotina(householdId:string) {
   const today=localDate();
+  const {error:rolloverError}=await supabase.rpc("rollover_incomplete_tasks");
+  if(rolloverError)throw rolloverError;
   const [tasks,completions,exclusions,days,exercises,classes,sessions,balance,rewards]=await Promise.all([
     supabase.from("tasks").select("*").eq("household_id",householdId).or(`task_date.eq.${today},recurring.eq.true`).order("created_at"),
     supabase.from("daily_task_completions").select("task_id,person,completed_at").eq("completed_date",today),

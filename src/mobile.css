@@ -76,6 +76,7 @@ button { touch-action: manipulation; }
 .delete-reveal span { font-size: 17px; }
 
 /* Add task sheet */
+.recurring-delete-sheet{padding-top:32px}.recurring-delete-sheet .description{margin:8px 0 20px;color:#9da1ac;line-height:1.5}.recurring-delete-sheet .description b{color:#f4f4f7}.recurring-delete-actions{display:grid;gap:10px}.recurring-delete-actions button{width:100%;min-height:68px;border-radius:14px;padding:13px 15px;text-align:left;display:flex;flex-direction:column;justify-content:center;gap:4px}.recurring-delete-actions span{font-size:13px;font-weight:750}.recurring-delete-actions small{font-size:10px;color:#9599a5}.danger-action{border:1px solid #71343e;background:#2c171d;color:#f18b98}.recurring-delete-actions .danger-action small{color:#bd7c86}.cancel-action{width:100%;margin-top:10px;border:0;background:transparent;color:#8f939e;padding:12px}
 .task-form { padding-top: 30px; overflow-x: hidden; }
 .task-form > h1 { margin-bottom: 25px; }
 .task-form label { display: flex; flex-direction: column; gap: 8px; color: #b6bac3; font-size: 11px; margin-bottom: 17px; }

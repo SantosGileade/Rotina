@@ -137,6 +137,7 @@ export default function Home() {
   const [trainedWorkoutDays,setTrainedWorkoutDays]=useState<Record<Person,number[]>>({gileade:[],renata:[]});
   const [spiritualDone, setSpiritualDone] = useState(false);
   const [addingTask, setAddingTask] = useState(false);
+  const [recurringDeleteTarget, setRecurringDeleteTarget] = useState<(typeof tasksSeed)[number] | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [editingWorkout, setEditingWorkout] = useState<number | null>(null);
   const [editingClasses, setEditingClasses] = useState(false);
@@ -321,6 +322,7 @@ export default function Home() {
   const goBack = () => {
     if (detailExercise) return setDetailExercise(null);
     if (workout) return setWorkout(false);
+    if (recurringDeleteTarget) return setRecurringDeleteTarget(null);
     if (addingTask) return setAddingTask(false);
     if (editingWorkout !== null) return setEditingWorkout(null);
     if (editingClasses) return setEditingClasses(false);
@@ -332,11 +334,11 @@ export default function Home() {
     navigate(screenHistory.current.at(-1) || "resumo", true);
   };
 
-  const overlayOpen = detailExercise!==null||addingTask||editingWorkout!==null||editingClasses||honorDay!==null||redeemingReward!==null||editingRewards||menuOpen;
+  const overlayOpen = detailExercise!==null||addingTask||recurringDeleteTarget!==null||editingWorkout!==null||editingClasses||honorDay!==null||redeemingReward!==null||editingRewards||menuOpen;
   const backTarget: Screen = workout ? screen : (screenHistory.current.length>1 ? screenHistory.current[screenHistory.current.length-2] as Screen : "resumo");
 
   const startEdgeSwipe = (event: React.PointerEvent) => {
-    const canGoBack=screenHistory.current.length>1||detailExercise!==null||workout||addingTask||editingWorkout!==null||editingClasses||honorDay!==null||redeemingReward!==null||editingRewards||menuOpen;
+    const canGoBack=screenHistory.current.length>1||detailExercise!==null||workout||addingTask||recurringDeleteTarget!==null||editingWorkout!==null||editingClasses||honorDay!==null||redeemingReward!==null||editingRewards||menuOpen;
     edgeSwipe.current = { active: canGoBack&&event.clientX <= 24, startX: event.clientX, startY: event.clientY };
     if(edgeSwipe.current.active)setSwipeDragging(true);
   };
@@ -358,7 +360,7 @@ export default function Home() {
 
   const renderScreen = (target: Screen, workoutActive: boolean, underlay: boolean) => <>
     {target === "resumo" && <Resumo now={now} greeting={greeting} done={done} total={visibleTasks.length} workoutDone={workoutDone} workoutProgress={(series - 1) / 4 * 100} spiritualDone={spiritualDone} person={person} classes={groupSchedule[person]} celebrateRequested={!underlay && summaryCelebrationPending} onCelebrated={()=>{const key=`rotina-summary-complete-${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`;localStorage.setItem(key,"true");setSummaryCelebrationPending(false);}} onGo={navigate} />}
-    {target === "hoje" && <Hoje now={now} tasks={visibleTasks} toggle={toggleTask} remove={(id) => {const task=tasks.find(t=>t.id===id);setTasks(current=>current.filter(task=>task.id!==id));if(task?.recurring)void excludeTaskForToday(id).catch(showDatabaseError);else void removeTaskRecord(id).catch(showDatabaseError);}} done={done} onAdd={() => setAddingTask(true)} />}
+    {target === "hoje" && <Hoje now={now} tasks={visibleTasks} toggle={toggleTask} remove={(id) => {const task=tasks.find(t=>t.id===id);if(task?.recurring){setRecurringDeleteTarget(task);return;}setTasks(current=>current.filter(item=>item.id!==id));void removeTaskRecord(id).catch(showDatabaseError);}} done={done} onAdd={() => setAddingTask(true)} />}
     {target === "treino" && !workoutActive && <Treino now={now} person={person} plan={weeklyPlan} classes={groupSchedule[person]} selectedDay={workoutDay} workoutDone={workoutDone} trainedDays={trainedWorkoutDays[person]} onSelectDay={setWorkoutDay} onDetail={(exercise,index,total) => setDetailExercise({exercise,index,total})} onStart={startWorkout} onEdit={() => setEditingWorkout(workoutDay)} onEditClasses={() => setEditingClasses(true)} onMarkDone={(day) => setHonorDay(day)} />}
     {target === "treino" && workoutActive && <WorkoutMode plan={weeklyPlan[workoutDay]} activeExercise={activeExercise} completed={completedExercises} series={series} rest={rest} ready={exerciseReady} onSeries={concludeSeries} onRestDone={()=>setRest(0)} onChoose={(index) => { const current=weeklyPlan[workoutDay].exercises[activeExercise]; setExerciseProgress(progress=>({...progress,[current.id]:{series,ready:exerciseReady}})); const target=exerciseProgress[weeklyPlan[workoutDay].exercises[index].id]; setActiveExercise(index); setSeries(target?.series||1); setRest(0); setExerciseReady(target?.ready||false); }} onWeight={changeWeight} />}
     {target === "espiritual" && <Espiritual reward={reward} checked={spiritualDone} setChecked={setSpiritualDone} />}
@@ -387,6 +389,7 @@ export default function Home() {
       <div className="overlay-stack">
         {detailExercise && <ExerciseDetail target={detailExercise} onClose={() => setDetailExercise(null)} />}
         {addingTask && <AddTaskModal onClose={() => setAddingTask(false)} onAdd={addTask} />}
+        {recurringDeleteTarget && <RecurringDeleteModal task={recurringDeleteTarget} onClose={()=>setRecurringDeleteTarget(null)} onDeleteToday={()=>{const id=recurringDeleteTarget.id;setTasks(current=>current.filter(item=>item.id!==id));setRecurringDeleteTarget(null);void excludeTaskForToday(id).catch(showDatabaseError);}} onDeleteForever={()=>{const id=recurringDeleteTarget.id;setTasks(current=>current.filter(item=>item.id!==id));setRecurringDeleteTarget(null);void removeTaskRecord(id).catch(showDatabaseError);}} />}
         {menuOpen && <PersonMenu person={person} onSelect={selectPerson} onClose={() => setMenuOpen(false)} />}
         {editingWorkout !== null && <WorkoutEditor day={editingWorkout} plan={weeklyPlan} onClose={() => setEditingWorkout(null)} onSave={(next) => { saveWeeklyPlan(next); setEditingWorkout(null); }} />}
         {editingClasses && <GroupClassEditor person={person} schedule={groupSchedule} onClose={() => setEditingClasses(false)} onSave={(next) => { saveGroupSchedule(next); setEditingClasses(false); }} />}
@@ -471,6 +474,10 @@ function SwipeTask({ task, onToggle, onDelete }: { task: typeof tasksSeed[number
   return <div className="swipe-task"><div className="delete-reveal"><span>⌫</span><b>Excluir</b></div><button className={`task ${task.done?"done":""}`} style={{transform:`translateX(${offset}px)`,transition:dragging?"none":"transform .22s ease"}} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onClick={()=>{if(!moved.current)onToggle();}}><span className="check">{task.done&&"✓"}</span><span className="task-copy"><b>{task.title}{task.recurring&&<i className="recurring-badge" title="Tarefa rotineira">↻</i>}</b><small>{task.tag} · <em className={task.level.toLowerCase()}>{task.level}</em> · +{task.coins} ✦</small></span><time>{task.time}</time></button></div>;
 }
 
+function RecurringDeleteModal({ task, onClose, onDeleteToday, onDeleteForever }: { task:typeof tasksSeed[number]; onClose:()=>void; onDeleteToday:()=>void; onDeleteForever:()=>void }) {
+  return <div className="modal"><div className="sheet recurring-delete-sheet"><button className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">ATIVIDADE DE ROTINA</p><h1>Como deseja excluir?</h1><p className="description"><b>{task.title}</b> está configurada para aparecer todos os dias.</p><div className="recurring-delete-actions"><button className="outline-add" onClick={onDeleteToday}><span>Ocultar só hoje</span><small>A atividade volta a aparecer amanhã.</small></button><button className="danger-action" onClick={onDeleteForever}><span>Excluir definitivamente</span><small>Remove esta atividade de todos os dias.</small></button></div><button className="cancel-action" onClick={onClose}>Cancelar</button></div></div>;
+}
+
 function AddTaskModal({ onClose, onAdd }: { onClose:()=>void; onAdd:(task:{title:string;level:string;tag:string;time:string;recurring:boolean})=>void }) {
   const [title,setTitle]=useState(""); const [level,setLevel]=useState("Fácil"); const [tag,setTag]=useState("Casa"); const [time,setTime]=useState(""); const [recurring,setRecurring]=useState(false);
   return <div className="modal"><form className="sheet task-form" onSubmit={(e)=>{e.preventDefault();if(title.trim())onAdd({title:title.trim(),level,tag,time,recurring});}}><button type="button" className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">NOVA ATIVIDADE</p><h1>Adicionar afazer</h1><label>Nome da atividade<input required value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex.: Organizar a cozinha" /></label><label>Horário <small>(opcional)</small><input type="time" value={time} onChange={e=>setTime(e.target.value)} /></label><fieldset><legend>Dificuldade</legend><div className="choice-row">{["Fácil","Médio","Difícil"].map(item=><button type="button" key={item} className={level===item?"selected":""} onClick={()=>setLevel(item)}>{item}</button>)}</div></fieldset><fieldset><legend>Categoria</legend><div className="choice-row categories">{["Casa","Juntos","Pessoal","Estudo","Saúde"].map(item=><button type="button" key={item} className={tag===item?"selected":""} onClick={()=>setTag(item)}>{item}</button>)}</div></fieldset><label className="recurring-toggle"><input type="checkbox" checked={recurring} onChange={e=>setRecurring(e.target.checked)} /><span className="toggle-track"><span className="toggle-thumb"/></span><span className="recurring-copy"><b>Repetir todos os dias</b><small>Aparece diariamente. Excluir num dia some só naquele dia.</small></span></label><button className="primary" type="submit">Adicionar atividade</button></form></div>;
@@ -526,23 +533,23 @@ const exerciseGuides = [
   { names:["rosca direta"], image:"rosca-direta.jpg", tip:"Cotovelos junto ao corpo; eleve a barra sem impulsionar o tronco." },
   { names:["rosca martelo"], image:"rosca-martelo.jpg", tip:"Palmas voltadas uma para a outra e cotovelos parados durante a subida." },
   { names:["rosca alternada com halteres","rosca alternada"], image:"rosca-alternada.jpg", tip:"Suba um halter de cada vez sem girar ou inclinar o tronco." },
-  { names:["agachamento sumo","agachamento sumô"], image:"https://images.pexels.com/photos/30246175/pexels-photo-30246175.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Pés bem abertos e pontas para fora; desça mantendo o peso nos calcanhares." },
-  { names:["agachamento"], image:"https://images.pexels.com/photos/13106591/pexels-photo-13106591.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Pés na largura dos ombros; desça controlado mantendo o peito erguido." },
-  { names:["leg press"], image:"https://images.pexels.com/photos/6844939/pexels-photo-6844939.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Pés na largura dos ombros na plataforma; não trave os joelhos no topo." },
-  { names:["cadeira abdutora","abducao lateral","abdução lateral"], image:"https://images.pexels.com/photos/6539861/pexels-photo-6539861.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Empurre os joelhos (ou a perna) para fora com controle, sem impulso." },
-  { names:["cadeira extensora"], image:"https://images.pexels.com/photos/19722966/pexels-photo-19722966.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Estenda as pernas sem tirar as costas do encosto e desça devagar." },
-  { names:["cadeira"], image:"https://images.pexels.com/photos/6844939/pexels-photo-6844939.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Ajuste o banco e mantenha a postura firme durante todo o movimento." },
-  { names:["desenvolvimento"], image:"https://images.pexels.com/photos/7289370/pexels-photo-7289370.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Empurre o peso para cima sem hiperestender a lombar." },
-  { names:["elevacao de pernas","elevação de pernas"], image:"https://images.pexels.com/photos/38641936/pexels-photo-38641936.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Eleve as pernas com controle, sem balançar o corpo." },
-  { names:["elevacao lateral","elevação lateral"], image:"https://images.pexels.com/photos/29793977/pexels-photo-29793977.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Suba os braços até a linha dos ombros com os cotovelos levemente flexionados." },
-  { names:["elevacao pelvica","elevação pélvica"], image:"https://images.pexels.com/photos/31028213/pexels-photo-31028213.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Apoie a parte de cima das costas e suba o quadril contraindo o glúteo." },
-  { names:["esteira"], image:"https://images.pexels.com/photos/30704307/pexels-photo-30704307.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Mantenha um ritmo constante e postura ereta durante a corrida ou caminhada." },
-  { names:["mesa flexora"], image:"https://images.pexels.com/photos/11191177/pexels-photo-11191177.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Deitado de bruços, flexione os joelhos trazendo os calcanhares em direção ao glúteo." },
-  { names:["mobilidade"], image:"https://images.pexels.com/photos/8413737/pexels-photo-8413737.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Movimente as articulações com calma, sem forçar além do conforto." },
-  { names:["panturrilha"], image:"https://images.pexels.com/photos/13965339/pexels-photo-13965339.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Suba na ponta dos pés e desça controlado até alongar bem a panturrilha." },
-  { names:["prancha"], image:"https://images.pexels.com/photos/4047105/pexels-photo-4047105.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Corpo alinhado da cabeça aos pés, abdômen contraído durante todo o tempo." },
-  { names:["stiff"], image:"https://images.pexels.com/photos/13822300/pexels-photo-13822300.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Pernas quase retas; desça a barra rente às pernas mantendo as costas retas." },
-  { names:["abdominal na maquina","abdominal máquina"], image:"https://images.pexels.com/photos/4162548/pexels-photo-4162548.jpeg?auto=compress&cs=tinysrgb&w=800", tip:"Flexione o tronco contraindo o abdômen, sem puxar com o pescoço." },
+  { names:["agachamento sumo","agachamento sumô"], image:"agachamento-sumo.jpg", tip:"Pés bem abertos e pontas para fora; desça mantendo o peso nos calcanhares." },
+  { names:["agachamento"], image:"agachamento.jpg", tip:"Pés na largura dos ombros; desça controlado mantendo o peito erguido." },
+  { names:["leg press"], image:"leg-press.jpg", tip:"Pés na largura dos ombros na plataforma; não trave os joelhos no topo." },
+  { names:["cadeira abdutora","abducao lateral","abdução lateral"], image:"cadeira-abdutora.jpg", tip:"Empurre os joelhos (ou a perna) para fora com controle, sem impulso." },
+  { names:["cadeira extensora"], image:"cadeira-extensora.jpg", tip:"Estenda as pernas sem tirar as costas do encosto e desça devagar." },
+  { names:["cadeira"], image:"cadeira-generica.jpg", tip:"Ajuste o banco e mantenha a postura firme durante todo o movimento." },
+  { names:["desenvolvimento"], image:"desenvolvimento.jpg", tip:"Empurre o peso para cima sem hiperestender a lombar." },
+  { names:["elevacao de pernas","elevação de pernas"], image:"elevacao-pernas.jpg", tip:"Eleve as pernas com controle, sem balançar o corpo." },
+  { names:["elevacao lateral","elevação lateral"], image:"elevacao-lateral.jpg", tip:"Suba os braços até a linha dos ombros com os cotovelos levemente flexionados." },
+  { names:["elevacao pelvica","elevação pélvica"], image:"elevacao-pelvica.jpg", tip:"Apoie a parte de cima das costas e suba o quadril contraindo o glúteo." },
+  { names:["esteira"], image:"esteira.jpg", tip:"Mantenha um ritmo constante e postura ereta durante a corrida ou caminhada." },
+  { names:["mesa flexora"], image:"mesa-flexora.jpg", tip:"Deitado de bruços, flexione os joelhos trazendo os calcanhares em direção ao glúteo." },
+  { names:["mobilidade"], image:"mobilidade.jpg", tip:"Movimente as articulações com calma, sem forçar além do conforto." },
+  { names:["panturrilha"], image:"panturrilha.jpg", tip:"Suba na ponta dos pés e desça controlado até alongar bem a panturrilha." },
+  { names:["prancha"], image:"prancha.jpg", tip:"Corpo alinhado da cabeça aos pés, abdômen contraído durante todo o tempo." },
+  { names:["stiff"], image:"stiff.jpg", tip:"Pernas quase retas; desça a barra rente às pernas mantendo as costas retas." },
+  { names:["abdominal na maquina","abdominal máquina"], image:"abdominal-maquina.jpg", tip:"Flexione o tronco contraindo o abdômen, sem puxar com o pescoço." },
 ];
 const normalizeExerciseName=(value:string)=>value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
 function getExerciseGuide(name:string){const normalized=normalizeExerciseName(name);return exerciseGuides.find(item=>item.names.some(alias=>normalized.includes(alias)));}
