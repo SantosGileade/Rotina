@@ -2,95 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ensureAnonymousSession, supabaseConfigured } from "./supabase";
-import { currentHousehold, excludeTaskForToday, finishWorkout, finishWorkoutForDate, insertTask, loadRotina, pairHousehold, redeemReward, removeTaskRecord, saveClasses, saveRewards, saveWorkoutPlan, seedDefaultRewards, setTaskDone, updateExerciseWeight } from "./database";
+import { currentHousehold, finishWorkout, finishWorkoutForDate, loadRotina, pairHousehold, saveClasses, saveWorkoutPlan, updateExerciseWeight } from "./database";
 
-type Screen = "resumo" | "hoje" | "treino" | "espiritual" | "conquistas";
 type Person = "gileade" | "renata";
 type WorkoutExercise = { id: string; name: string; sets: number; reps: string; muscle: string; weight: number };
 type WorkoutDay = { title: string; muscles: string; duration: number; exercises: WorkoutExercise[] };
 type WeeklyPlan = Record<number, WorkoutDay>;
 type GroupClass = { id: string; day: string; name: string; time: string };
 type GroupSchedule = Record<Person, GroupClass[]>;
-type Reward = { id: string; icon: string; name: string; price: number };
 
-const Icon = ({ children }: { children: React.ReactNode }) => <span className="icon">{children}</span>;
 const Progress = ({ value, color = "purple" }: { value: number; color?: string }) => (
   <div className="progress"><i className={color} style={{ width: `${value}%` }} /></div>
 );
-const Confetti = () => <div className="confetti-screen" aria-hidden="true">{Array.from({length:58},(_,i)=><i key={i} style={{"--left":`${2+(i*29)%96}%`,"--drift":`${(i%9-4)*14}px`,"--delay":`${(i%16)*.12}s`,"--duration":`${3.2+(i%7)*.22}s`,"--color":["#f5c75f","#68d79a","#a98bfa","#60b5f5","#f28aa7"][i%5]} as React.CSSProperties}/>)}</div>;
-
-const tasksSeed = [
-  { id: "1", title: "Arrumar a cama", time: "08:00", tag: "Casa", level: "Fácil", coins: 5, done: true, person: "both", recurring: false },
-  { id: "2", title: "Trabalhar no projeto", time: "até 12:00", tag: "Foco", level: "Difícil", coins: 20, done: false, person: "gileade", recurring: false },
-  { id: "3", title: "Estudar inglês", time: "20 min", tag: "Estudo", level: "Médio", coins: 10, done: false, person: "renata", recurring: false },
-  { id: "4", title: "Ler 10 páginas", time: "", tag: "Leitura", level: "Fácil", coins: 5, done: true, person: "both", recurring: false },
-  { id: "5", title: "Comprar algo para o jantar", time: "18:30", tag: "Juntos", level: "Médio", coins: 10, done: false, person: "both", recurring: false },
-  { id: "6", title: "Organizar as finanças", time: "", tag: "Casa", level: "Difícil", coins: 20, done: false, person: "gileade", recurring: false },
-];
 
 const defaultGroupClasses: GroupSchedule = {
   gileade: [{ id:"g-1", day: "Sexta-feira", name: "Muay Thai", time: "18:30" }, { id:"g-2", day: "Sábado", name: "Funcional", time: "09:00" }],
   renata: [{ id:"r-1", day: "Sexta-feira", name: "Pilates", time: "17:30" }, { id:"r-2", day: "Sábado", name: "Fit Dance", time: "10:00" }],
 };
 
-const defaultRewards: Array<{ icon: string; name: string; price: number }> = [
-  { icon: "☕", name: "Café especial", price: 250 },
-  { icon: "🍦", name: "Sorvete juntos", price: 400 },
-  { icon: "🎬", name: "Noite de cinema em casa", price: 600 },
-  { icon: "🍣", name: "Japonês", price: 900 },
-  { icon: "🎳", name: "Programa de lazer fora", price: 1200 },
-  { icon: "💆", name: "Dia de spa a dois", price: 1600 },
-  { icon: "🍽️", name: "Jantar especial fora", price: 2000 },
-  { icon: "🏖️", name: "Passeio de um dia", price: 2600 },
-  { icon: "🎁", name: "Presente surpresa", price: 3200 },
-  { icon: "✈️", name: "Escapada de fim de semana", price: 5000 },
-];
-
-let celebrationAudio: AudioContext | null = null;
-function playCelebrationSound() {
-  const AudioCtx = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AudioCtx) return;
-  celebrationAudio ??= new AudioCtx(); void celebrationAudio.resume();
-  const context = celebrationAudio;
-  const now = context.currentTime;
-
-  const wind = context.createBuffer(1, Math.floor(context.sampleRate * 1.8), context.sampleRate);
-  const windData = wind.getChannelData(0);
-  for (let index = 0; index < windData.length; index += 1) windData[index] = Math.random() * 2 - 1;
-  const windSource = context.createBufferSource();
-  const windFilter = context.createBiquadFilter();
-  const windGain = context.createGain();
-  windSource.buffer = wind;
-  windFilter.type = "bandpass";
-  windFilter.frequency.setValueAtTime(520, now);
-  windFilter.frequency.exponentialRampToValueAtTime(1700, now + .85);
-  windFilter.frequency.exponentialRampToValueAtTime(760, now + 1.65);
-  windFilter.Q.value = .7;
-  windGain.gain.setValueAtTime(.0001, now);
-  windGain.gain.exponentialRampToValueAtTime(.075, now + .3);
-  windGain.gain.exponentialRampToValueAtTime(.0001, now + 1.75);
-  windSource.connect(windFilter).connect(windGain).connect(context.destination);
-  windSource.start(now);
-  windSource.stop(now + 1.8);
-
-  [523.25, 659.25, 783.99].forEach((frequency, index) => {
-    const oscillator = context.createOscillator();
-    const noteGain = context.createGain();
-    const start = now + .38 + index * .11;
-    oscillator.type = index === 2 ? "sine" : "triangle";
-    oscillator.frequency.setValueAtTime(frequency, start);
-    oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.035, start + .75);
-    noteGain.gain.setValueAtTime(.0001, start);
-    noteGain.gain.exponentialRampToValueAtTime(.055, start + .08);
-    noteGain.gain.exponentialRampToValueAtTime(.0001, start + 1.05);
-    oscillator.connect(noteGain).connect(context.destination);
-    oscillator.start(start);
-    oscillator.stop(start + 1.1);
-  });
-}
-
-const longDate = (date: Date) => new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long" }).format(date);
-const dayAndMonth = (date: Date) => new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long" }).format(date);
 const weekday = (date: Date) => new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(date);
 
 const makeExercise = (id: string, name: string, sets: number, reps: string, muscle: string, weight: number): WorkoutExercise => ({ id, name, sets, reps, muscle, weight });
@@ -104,23 +33,11 @@ const defaultWeeklyPlan: WeeklyPlan = {
   6: { title: "Treino leve", muscles: "Cardio + mobilidade", duration: 40, exercises: [makeExercise("sab-1","Esteira",1,"20 min","Cardio",0),makeExercise("sab-2","Mobilidade",3,"10","Corpo todo",0)] },
 };
 const weekdayLabels = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-const classDayIndex = (day:string) => ["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"].indexOf(day);
-function nextGroupClass(classes:GroupClass[], now:Date) {
-  return [...classes].sort((a,b)=>{
-    const distance=(item:GroupClass)=>{const [hour,minute]=item.time.split(":").map(Number);let days=(classDayIndex(item.day)-now.getDay()+7)%7;if(days===0&&(hour<now.getHours()||(hour===now.getHours()&&minute<now.getMinutes())))days=7;return days*1440+hour*60+minute;};
-    return distance(a)-distance(b);
-  })[0];
-}
 
 export default function Home() {
   const [databaseState,setDatabaseState]=useState<"loading"|"ready"|"error">("loading");
   const [databaseError,setDatabaseError]=useState("");
   const [householdId,setHouseholdId]=useState("");
-  const [databaseUserId,setDatabaseUserId]=useState("");
-  const [screen, setScreen] = useState<Screen>("resumo");
-  const [tasks, setTasks] = useState(tasksSeed);
-  const [taskCompletions,setTaskCompletions]=useState<Record<string,Person[]>>({});
-  const [coins, setCoins] = useState(0);
   const [toast, setToast] = useState("");
   const [detailExercise, setDetailExercise] = useState<{ exercise: WorkoutExercise; index: number; total: number } | null>(null);
   const [workout, setWorkout] = useState(false);
@@ -135,17 +52,10 @@ export default function Home() {
   const [workoutDone, setWorkoutDone] = useState(false);
   const [completedWorkouts,setCompletedWorkouts]=useState<Record<Person,boolean>>({gileade:false,renata:false});
   const [trainedWorkoutDays,setTrainedWorkoutDays]=useState<Record<Person,number[]>>({gileade:[],renata:[]});
-  const [spiritualDone, setSpiritualDone] = useState(false);
-  const [addingTask, setAddingTask] = useState(false);
-  const [recurringDeleteTarget, setRecurringDeleteTarget] = useState<(typeof tasksSeed)[number] | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [editingWorkout, setEditingWorkout] = useState<number | null>(null);
   const [editingClasses, setEditingClasses] = useState(false);
   const [honorDay, setHonorDay] = useState<number | null>(null);
-  const [rewards, setRewards] = useState<Reward[]>([]);
-  const [editingRewards, setEditingRewards] = useState(false);
-  const [redeemingReward, setRedeemingReward] = useState<Reward | null>(null);
-  const [celebratingRedeem, setCelebratingRedeem] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const [weeklyPlans, setWeeklyPlans] = useState<Record<Person,WeeklyPlan>>(() => {
     try { const saved=JSON.parse(localStorage.getItem("rotina-weekly-plans")||"null");return saved||{gileade:defaultWeeklyPlan,renata:defaultWeeklyPlan}; }
@@ -158,34 +68,20 @@ export default function Home() {
   const [person, setPerson] = useState<Person>(() => (localStorage.getItem("rotina-person") as Person) || "gileade");
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [swipeDragging, setSwipeDragging] = useState(false);
-  const screenHistory = useRef<Screen[]>(["resumo"]);
   const edgeSwipe = useRef({ active: false, startX: 0, startY: 0 });
   const weeklyPlan=weeklyPlans[person];
-  const visibleTasks = tasks.filter((task) => task.person === "both" || task.person === person).map(task=>({...task,done:(taskCompletions[task.id]||[]).includes(person)}));
-  const done = visibleTasks.filter((t) => t.done).length;
-  const taskPercent = visibleTasks.length ? Math.round(done / visibleTasks.length * 100) : 0;
-  const summaryPercent = Math.round((taskPercent + (workoutDone ? 100 : Math.round((series - 1) / 4 * 100)) + (spiritualDone ? 100 : 0)) / 3);
-  const [summaryCelebrationPending, setSummaryCelebrationPending] = useState(false);
-  const previousSummaryPercent = useRef(summaryPercent);
   const selectPerson = (next: Person) => { setPerson(next);setWorkoutDone(completedWorkouts[next]); localStorage.setItem("rotina-person", next); };
   const saveWeeklyPlan = (next: WeeklyPlan) => { const all={...weeklyPlans,[person]:next};setWeeklyPlans(all);localStorage.setItem("rotina-weekly-plans",JSON.stringify(all));if(householdId)void saveWorkoutPlan(householdId,person,next).catch(error=>showDatabaseError(error)); };
   const saveGroupSchedule = (next: GroupSchedule) => { setGroupSchedule(next); localStorage.setItem("rotina-group-classes", JSON.stringify(next));if(householdId)void saveClasses(householdId,person,next[person]).catch(error=>showDatabaseError(error)); };
 
   function showDatabaseError(error:unknown){const message=error instanceof Error?error.message:typeof error==="object"&&error!==null&&"message" in error?String(error.message):"Não foi possível sincronizar com o Supabase.";setToast(`Erro: ${message}`);window.setTimeout(()=>setToast(""),4200);}
+  function notify(message:string){setToast(message);window.setTimeout(()=>setToast(""),2600);}
 
-  async function hydrate(household:string, userIdOverride?:string){
-    const userId=userIdOverride||databaseUserId;
+  async function hydrate(household:string){
     const data=await loadRotina(household);
-    const completionMap:Record<string,Person[]>={};
-    data.completions.forEach((item:any)=>{completionMap[item.task_id]=[...(completionMap[item.task_id]||[]),item.person as Person];});
-    setTaskCompletions(completionMap);
-    const excludedIds=new Set((data.exclusions as any[]).map((item:any)=>item.task_id));
-    setTasks(data.tasks.filter((item:any)=>!excludedIds.has(item.id)).map((item:any)=>({id:item.id,title:item.title,time:item.task_time?.slice(0,5)||"",tag:item.category,level:item.difficulty==="hard"?"Difícil":item.difficulty==="medium"?"Médio":"Fácil",coins:item.coin_reward,done:false,person:item.assignment,recurring:Boolean(item.recurring)})));
-    setCoins(data.balance);
     const plans:Record<Person,WeeklyPlan>={gileade:structuredClone(defaultWeeklyPlan),renata:structuredClone(defaultWeeklyPlan)};
     const ids:Record<Person,Record<number,string>>={gileade:{},renata:{}};
     for(const row of data.days as any[]){const owner=row.person as Person;ids[owner][row.day_of_week]=row.id;plans[owner][row.day_of_week]={title:row.title,muscles:row.muscles,duration:row.duration_minutes,exercises:(data.exercises as any[]).filter(item=>item.workout_day_id===row.id).map(item=>({id:item.id,name:item.name,sets:item.sets,reps:item.reps,muscle:item.muscle,weight:Number(item.weight)}))};}
-    if(!(data.days as any[]).length||!(data.rewards as any[]).length){const seeds:Promise<unknown>[]=[];if(!(data.days as any[]).length)seeds.push(saveWorkoutPlan(household,"gileade",defaultWeeklyPlan),saveWorkoutPlan(household,"renata",defaultWeeklyPlan),saveClasses(household,"gileade",defaultGroupClasses.gileade),saveClasses(household,"renata",defaultGroupClasses.renata));if(!(data.rewards as any[]).length)seeds.push(seedDefaultRewards(household,userId,defaultRewards));await Promise.all(seeds);return hydrate(household,userId);}
     setWeeklyPlans(plans);setWorkoutDayIds(ids);localStorage.setItem("rotina-weekly-plans",JSON.stringify(plans));
     const schedules:GroupSchedule={gileade:[],renata:[]};const dayNames=["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"];
     (data.classes as any[]).forEach(item=>schedules[item.person as Person].push({id:item.id,day:dayNames[item.day_of_week],name:item.name,time:item.class_time.slice(0,5)}));setGroupSchedule(schedules);localStorage.setItem("rotina-group-classes",JSON.stringify(schedules));
@@ -194,11 +90,10 @@ export default function Home() {
     const trained:Record<Person,number[]>={gileade:[],renata:[]};
     (data.sessions as any[]).forEach(item=>{const owner=item.person as Person;const weekday=new Date(`${item.completion_date}T12:00:00`).getDay();if(!trained[owner].includes(weekday))trained[owner].push(weekday);});
     setTrainedWorkoutDays(trained);
-    setRewards((data.rewards as any[]).map(item=>({id:item.id,icon:item.icon,name:item.name,price:Number(item.price)})));
     setDatabaseState("ready");
   }
 
-  useEffect(()=>{void(async()=>{try{if(!supabaseConfigured)throw new Error("As variáveis do Supabase não foram configuradas.");const user=await ensureAnonymousSession();setDatabaseUserId(user.id);const existingHousehold=await currentHousehold();const household=existingHousehold||await pairHousehold("rotina-gileade-renata-2026");setHouseholdId(household);await hydrate(household,user.id);}catch(error){const message=error instanceof Error?error.message:typeof error==="object"&&error!==null&&"message" in error?String(error.message):"Falha ao conectar ao Supabase.";setDatabaseError(message);setDatabaseState("error");}})();},[]);
+  useEffect(()=>{void(async()=>{try{if(!supabaseConfigured)throw new Error("As variáveis do Supabase não foram configuradas.");await ensureAnonymousSession();const existingHousehold=await currentHousehold();const household=existingHousehold||await pairHousehold("rotina-gileade-renata-2026");setHouseholdId(household);await hydrate(household);}catch(error){const message=error instanceof Error?error.message:typeof error==="object"&&error!==null&&"message" in error?String(error.message):"Falha ao conectar ao Supabase.";setDatabaseError(message);setDatabaseState("error");}})();},[]);
   useEffect(()=>{if(databaseState!=="ready"||!householdId)return;const refresh=()=>{if(document.visibilityState==="visible")void hydrate(householdId).catch(showDatabaseError);};window.addEventListener("focus",refresh);document.addEventListener("visibilitychange",refresh);return()=>{window.removeEventListener("focus",refresh);document.removeEventListener("visibilitychange",refresh);};},[databaseState,householdId]);
 
   useEffect(() => {
@@ -220,38 +115,6 @@ export default function Home() {
     return () => { window.clearInterval(timer); window.removeEventListener("focus", refreshClock); document.removeEventListener("visibilitychange", refreshClock); };
   }, []);
 
-  useEffect(() => {
-    const key=`rotina-summary-complete-${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`;
-    if(summaryPercent<100){localStorage.removeItem(key);setSummaryCelebrationPending(false);}
-    else if(previousSummaryPercent.current<100||localStorage.getItem(key)!=="true")setSummaryCelebrationPending(true);
-    previousSummaryPercent.current=summaryPercent;
-  },[summaryPercent,now]);
-
-  const greeting = now.getHours() < 12 ? "Bom dia" : now.getHours() < 18 ? "Boa tarde" : "Boa noite";
-
-  function reward(amount: number, message = "Boa! Vocês estão avançando") {
-    setCoins((v) => v + amount);
-    setToast(`+${amount} moedas · ${message}`);
-    window.setTimeout(() => setToast(""), 2600);
-  }
-
-  function toggleTask(id: string) {
-    const task = tasks.find((t) => t.id === id)!;
-    const wasDone=(taskCompletions[id]||[]).includes(person);
-    setTaskCompletions(current=>({...current,[id]:wasDone?(current[id]||[]).filter(item=>item!==person):[...(current[id]||[]),person]}));
-    if (!wasDone) reward(task.coins); else setCoins((v) => Math.max(0, v - task.coins));
-    void setTaskDone(id,person,!wasDone).catch(error=>{setTaskCompletions(current=>({...current,[id]:wasDone?[...(current[id]||[]),person]:(current[id]||[]).filter(item=>item!==person)}));showDatabaseError(error);});
-  }
-
-  const navigate = (next: Screen, fromBack = false) => {
-    window.scrollTo(0, 0);
-    setWorkout(false);
-    setDetailExercise(null);
-    if (next === "treino" && screen !== "treino") setWorkoutDay(now.getDay());
-    if (!fromBack && next !== screen) screenHistory.current.push(next);
-    setScreen(next);
-  };
-
   const startWorkout = (day: number) => {
     if (!weeklyPlan[day].exercises.length) return;
     window.scrollTo({top:0,behavior:"instant"});
@@ -272,7 +135,7 @@ export default function Home() {
       if (nextIndex === -1) {
         const dayId=workoutDayIds[person][workoutDay];
         if(!dayId){showDatabaseError(new Error("O treino ainda não foi sincronizado."));return;}
-        void finishWorkout(dayId,person).then(awarded=>{if(awarded)reward(80,"Treino completo!");const nextCompleted={...completedWorkouts,[person]:workoutDay===now.getDay()||completedWorkouts[person]};setCompletedWorkouts(nextCompleted);setWorkoutDone(nextCompleted[person]);setTrainedWorkoutDays(current=>({...current,[person]:current[person].includes(workoutDay)?current[person]:[...current[person],workoutDay]}));setWorkout(false);setSeries(1);setExerciseReady(false);}).catch(showDatabaseError);return;
+        void finishWorkout(dayId,person).then(awarded=>{if(awarded)notify("Treino completo! 💪");const nextCompleted={...completedWorkouts,[person]:workoutDay===now.getDay()||completedWorkouts[person]};setCompletedWorkouts(nextCompleted);setWorkoutDone(nextCompleted[person]);setTrainedWorkoutDays(current=>({...current,[person]:current[person].includes(workoutDay)?current[person]:[...current[person],workoutDay]}));setWorkout(false);setSeries(1);setExerciseReady(false);}).catch(showDatabaseError);return;
       }
       setActiveExercise(nextIndex); setSeries(1); setRest(0); setExerciseReady(false); return;
     }
@@ -298,47 +161,25 @@ export default function Home() {
     target.setDate(target.getDate() + (day - target.getDay()));
     const dateStr = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}-${String(target.getDate()).padStart(2, "0")}`;
     void finishWorkoutForDate(dayId, person, dateStr).then(awarded => {
-      if (awarded) reward(80, "Treino registrado!");
+      if (awarded) notify("Treino registrado!");
       setTrainedWorkoutDays(current => ({ ...current, [person]: current[person].includes(day) ? current[person] : [...current[person], day] }));
       setHonorDay(null);
     }).catch(showDatabaseError);
   };
 
-  const saveRewardsList = (next: Array<{ icon:string; name:string; price:number }>) => {
-    if (!householdId) return;
-    void saveRewards(householdId, databaseUserId, next).then(() => hydrate(householdId)).catch(showDatabaseError);
-  };
-
-  const confirmRedeem = (target: Reward) => {
-    void redeemReward(target.id).then(() => {
-      setCoins(v => Math.max(0, v - target.price));
-      playCelebrationSound();
-      setCelebratingRedeem(true);
-      window.setTimeout(() => setCelebratingRedeem(false), 3200);
-      window.setTimeout(() => setRedeemingReward(null), 1300);
-    }).catch(error => { showDatabaseError(error); setRedeemingReward(null); });
-  };
-
   const goBack = () => {
     if (detailExercise) return setDetailExercise(null);
     if (workout) return setWorkout(false);
-    if (recurringDeleteTarget) return setRecurringDeleteTarget(null);
-    if (addingTask) return setAddingTask(false);
     if (editingWorkout !== null) return setEditingWorkout(null);
     if (editingClasses) return setEditingClasses(false);
     if (honorDay !== null) return setHonorDay(null);
-    if (redeemingReward) return setRedeemingReward(null);
-    if (editingRewards) return setEditingRewards(false);
     if (menuOpen) return setMenuOpen(false);
-    if (screenHistory.current.length > 1) screenHistory.current.pop();
-    navigate(screenHistory.current.at(-1) || "resumo", true);
   };
 
-  const overlayOpen = detailExercise!==null||addingTask||recurringDeleteTarget!==null||editingWorkout!==null||editingClasses||honorDay!==null||redeemingReward!==null||editingRewards||menuOpen;
-  const backTarget: Screen = workout ? screen : (screenHistory.current.length>1 ? screenHistory.current[screenHistory.current.length-2] as Screen : "resumo");
+  const overlayOpen = detailExercise!==null||editingWorkout!==null||editingClasses||honorDay!==null||menuOpen;
 
   const startEdgeSwipe = (event: React.PointerEvent) => {
-    const canGoBack=screenHistory.current.length>1||detailExercise!==null||workout||addingTask||recurringDeleteTarget!==null||editingWorkout!==null||editingClasses||honorDay!==null||redeemingReward!==null||editingRewards||menuOpen;
+    const canGoBack=detailExercise!==null||workout||editingWorkout!==null||editingClasses||honorDay!==null||menuOpen;
     edgeSwipe.current = { active: canGoBack&&event.clientX <= 24, startX: event.clientX, startY: event.clientY };
     if(edgeSwipe.current.active)setSwipeDragging(true);
   };
@@ -351,54 +192,32 @@ export default function Home() {
     if(shouldReturn){setSwipeOffset(window.innerWidth);window.setTimeout(()=>{goBack();setSwipeOffset(0);},170);}else setSwipeOffset(0);
   };
 
-  const addTask = async (task: { title: string; level: string; tag: string; time: string; recurring: boolean }) => {
-    const coinMap: Record<string, number> = { "Fácil": 5, "Médio": 10, "Difícil": 20 };
-    try{const assignment=task.tag==="Juntos"?"both":person;const row=await insertTask(householdId,databaseUserId,{title:task.title,category:task.tag,difficulty:task.level==="Difícil"?"hard":task.level==="Médio"?"medium":"easy",coin_reward:coinMap[task.level]||5,assignment,task_time:task.time||null,recurring:task.recurring});setTasks(current=>[...current,{id:row.id,...task,coins:coinMap[task.level]||5,done:false,person:assignment}]);setAddingTask(false);setToast("Atividade adicionada");window.setTimeout(()=>setToast(""),2200);}catch(error){showDatabaseError(error);}
-  };
-
   if(databaseState!=="ready")return <DatabaseGate state={databaseState} error={databaseError}/>;
 
-  const renderScreen = (target: Screen, workoutActive: boolean, underlay: boolean) => <>
-    {target === "resumo" && <Resumo now={now} greeting={greeting} done={done} total={visibleTasks.length} workoutDone={workoutDone} workoutProgress={(series - 1) / 4 * 100} spiritualDone={spiritualDone} person={person} classes={groupSchedule[person]} celebrateRequested={!underlay && summaryCelebrationPending} onCelebrated={()=>{const key=`rotina-summary-complete-${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`;localStorage.setItem(key,"true");setSummaryCelebrationPending(false);}} onGo={navigate} />}
-    {target === "hoje" && <Hoje now={now} tasks={visibleTasks} toggle={toggleTask} remove={(id) => {const task=tasks.find(t=>t.id===id);if(task?.recurring){setRecurringDeleteTarget(task);return;}setTasks(current=>current.filter(item=>item.id!==id));void removeTaskRecord(id).catch(showDatabaseError);}} done={done} onAdd={() => setAddingTask(true)} />}
-    {target === "treino" && !workoutActive && <Treino now={now} person={person} plan={weeklyPlan} classes={groupSchedule[person]} selectedDay={workoutDay} workoutDone={workoutDone} trainedDays={trainedWorkoutDays[person]} onSelectDay={setWorkoutDay} onDetail={(exercise,index,total) => setDetailExercise({exercise,index,total})} onStart={startWorkout} onEdit={() => setEditingWorkout(workoutDay)} onEditClasses={() => setEditingClasses(true)} onMarkDone={(day) => setHonorDay(day)} />}
-    {target === "treino" && workoutActive && <WorkoutMode plan={weeklyPlan[workoutDay]} activeExercise={activeExercise} completed={completedExercises} series={series} rest={rest} ready={exerciseReady} onSeries={concludeSeries} onRestDone={()=>setRest(0)} onChoose={(index) => { const current=weeklyPlan[workoutDay].exercises[activeExercise]; setExerciseProgress(progress=>({...progress,[current.id]:{series,ready:exerciseReady}})); const target=exerciseProgress[weeklyPlan[workoutDay].exercises[index].id]; setActiveExercise(index); setSeries(target?.series||1); setRest(0); setExerciseReady(target?.ready||false); }} onWeight={changeWeight} />}
-    {target === "espiritual" && <Espiritual reward={reward} checked={spiritualDone} setChecked={setSpiritualDone} />}
-    {target === "conquistas" && <Conquistas coins={coins} rewards={rewards} onRedeemRequest={(item)=>setRedeemingReward(item)} onEditRewards={()=>setEditingRewards(true)} />}
-  </>;
+  const treinoScreen = <Treino now={now} person={person} plan={weeklyPlan} classes={groupSchedule[person]} selectedDay={workoutDay} workoutDone={workoutDone} trainedDays={trainedWorkoutDays[person]} onSelectDay={setWorkoutDay} onDetail={(exercise,index,total) => setDetailExercise({exercise,index,total})} onStart={startWorkout} onEdit={() => setEditingWorkout(workoutDay)} onEditClasses={() => setEditingClasses(true)} onMarkDone={(day) => setHonorDay(day)} />;
 
   return (
     <main className={`app-shell ${swipeOffset>0?"edge-moving":""} ${swipeDragging?"edge-dragging":""} ${overlayOpen?"edge-modal-mode":""}`} style={{"--edge-swipe":`${swipeOffset}px`,"--edge-progress":swipeOffset?Math.min(1,swipeOffset/(window.innerWidth*.82)):0} as React.CSSProperties} onPointerDown={startEdgeSwipe} onPointerMove={moveEdgeSwipe} onPointerUp={endEdgeSwipe} onPointerCancel={endEdgeSwipe}>
       <div className="ambient one" /><div className="ambient two" />
-      <header className={`topbar ${screen === "hoje" || screen === "treino" ? "today-topbar" : ""} ${workout?"workout-topbar":""}`}>
-        {screen !== "hoje" && screen !== "treino" && <div className="brand-group"><button className="menu-trigger" onClick={() => setMenuOpen(true)} aria-label="Abrir configurações"><i/><i/><i/></button><button className="brand text-brand" onClick={() => navigate("resumo")}>Rotina</button></div>}
-        {screen==="treino"&&workout&&<button className="workout-exit-top" onClick={()=>setWorkout(false)}>‹ Sair</button>}
-        <button className="coin-pill" onClick={() => navigate("conquistas")}><Icon>✦</Icon><b>{coins}</b><small> moedas</small></button>
+      <header className={`topbar ${workout?"workout-topbar":""}`}>
+        {!workout && <div className="brand-group"><button className="menu-trigger" onClick={() => setMenuOpen(true)} aria-label="Abrir configurações"><i/><i/><i/></button><span className="brand text-brand">Rotina</span></div>}
+        {workout && <button className="workout-exit-top" onClick={()=>setWorkout(false)}>‹ Sair</button>}
       </header>
 
-      {!overlayOpen && (swipeDragging||swipeOffset>0) && <section className="content underlay-screen" aria-hidden="true">{renderScreen(backTarget, false, true)}</section>}
-      <section className="content" key={screen}>
-        {renderScreen(screen, workout, false)}
+      {!overlayOpen && (swipeDragging||swipeOffset>0) && workout && <section className="content underlay-screen" aria-hidden="true">{treinoScreen}</section>}
+      <section className="content">
+        {!workout && treinoScreen}
+        {workout && <WorkoutMode plan={weeklyPlan[workoutDay]} activeExercise={activeExercise} completed={completedExercises} series={series} rest={rest} ready={exerciseReady} onSeries={concludeSeries} onRestDone={()=>setRest(0)} onChoose={(index) => { const current=weeklyPlan[workoutDay].exercises[activeExercise]; setExerciseProgress(progress=>({...progress,[current.id]:{series,ready:exerciseReady}})); const target=exerciseProgress[weeklyPlan[workoutDay].exercises[index].id]; setActiveExercise(index); setSeries(target?.series||1); setRest(0); setExerciseReady(target?.ready||false); }} onWeight={changeWeight} />}
       </section>
 
-      {!workout && <nav className="bottom-nav">
-        {([
-          ["resumo", "⌂", "Resumo"], ["hoje", "✓", "Hoje"], ["treino", "↗", "Treino"], ["conquistas", "✦", "Conquistas"],
-        ] as [Screen, string, string][]).map(([id, ico, label]) => <button key={id} onClick={() => navigate(id)} className={screen === id ? "active" : ""}>{id === "treino" ? <span className="icon workout-nav-icon">↑</span> : <Icon>{ico}</Icon>}<small>{label}</small></button>)}
-      </nav>}
       <div className="overlay-stack">
         {detailExercise && <ExerciseDetail target={detailExercise} onClose={() => setDetailExercise(null)} />}
-        {addingTask && <AddTaskModal onClose={() => setAddingTask(false)} onAdd={addTask} />}
-        {recurringDeleteTarget && <RecurringDeleteModal task={recurringDeleteTarget} onClose={()=>setRecurringDeleteTarget(null)} onDeleteToday={()=>{const id=recurringDeleteTarget.id;setTasks(current=>current.filter(item=>item.id!==id));setRecurringDeleteTarget(null);void excludeTaskForToday(id).catch(showDatabaseError);}} onDeleteForever={()=>{const id=recurringDeleteTarget.id;setTasks(current=>current.filter(item=>item.id!==id));setRecurringDeleteTarget(null);void removeTaskRecord(id).catch(showDatabaseError);}} />}
         {menuOpen && <PersonMenu person={person} onSelect={selectPerson} onClose={() => setMenuOpen(false)} />}
         {editingWorkout !== null && <WorkoutEditor day={editingWorkout} plan={weeklyPlan} onClose={() => setEditingWorkout(null)} onSave={(next) => { saveWeeklyPlan(next); setEditingWorkout(null); }} />}
         {editingClasses && <GroupClassEditor person={person} schedule={groupSchedule} onClose={() => setEditingClasses(false)} onSave={(next) => { saveGroupSchedule(next); setEditingClasses(false); }} />}
         {honorDay !== null && <WorkoutHonorModal day={honorDay} onClose={() => setHonorDay(null)} onConfirm={() => confirmHonorWorkout(honorDay)} />}
-        {editingRewards && <RewardEditor rewards={rewards} onClose={() => setEditingRewards(false)} onSave={(next) => { saveRewardsList(next); setEditingRewards(false); }} />}
-        {redeemingReward && <RewardTicketModal reward={redeemingReward} coins={coins} onClose={() => setRedeemingReward(null)} onConfirm={() => confirmRedeem(redeemingReward)} />}
       </div>
-      {celebratingRedeem && <Confetti />}
-      {toast && <div className={`toast ${toast.startsWith("+") ? "success" : ""}`}><span>✦</span>{toast}</div>}
+      {toast && <div className={`toast ${!toast.startsWith("Erro") ? "success" : ""}`}><span>✦</span>{toast}</div>}
     </main>
   );
 }
@@ -407,80 +226,6 @@ function DatabaseGate({state,error}:{state:"loading"|"ready"|"error";error:strin
   if(state==="loading")return <main className="database-gate"><div className="database-loader"/><h1>Preparando a Rotina</h1><p>Conectando seus dados com segurança.</p></main>;
   if(state==="error"&&error.toLocaleLowerCase("pt-BR").includes("anonymous"))return <main className="database-gate"><span className="gate-icon">!</span><h1>Ative o acesso anônimo</h1><p>No Supabase, abra Authentication → Providers → Anonymous Sign-Ins e ative a opção. Depois atualize o aplicativo.</p></main>;
   return <main className="database-gate"><span className="gate-icon">!</span><h1>Não foi possível conectar</h1><p>{error||"Atualize o aplicativo e tente novamente."}</p></main>;
-}
-
-function Resumo({ now, greeting, done, total, workoutDone, workoutProgress, spiritualDone, person, classes, celebrateRequested, onCelebrated, onGo }: { now: Date; greeting: string; done: number; total: number; workoutDone: boolean; workoutProgress: number; spiritualDone: boolean; person: Person; classes:GroupClass[]; celebrateRequested:boolean; onCelebrated:()=>void; onGo: (s: Screen) => void }) {
-  const taskPercent = total ? Math.round(done / total * 100) : 0;
-  const trainingPercent = workoutDone ? 100 : Math.round(workoutProgress);
-  const spiritualPercent = spiritualDone ? 100 : 0;
-  const weekRows = [["Afazeres", taskPercent, "green"], ["Treino", trainingPercent, "purple"], ["Espiritual", spiritualPercent, "blue"]] as const;
-  const weekScore = Math.round(weekRows.reduce((sum, row) => sum + row[1], 0) / weekRows.length);
-  const dayPercent = Math.round((taskPercent + trainingPercent + spiritualPercent) / 3);
-  const [celebrating, setCelebrating] = useState(false);
-  const [animatedTaskPercent, setAnimatedTaskPercent] = useState(0);
-  const [focusCollapsed, setFocusCollapsed] = useState(() => localStorage.getItem("rotina-focus-collapsed") === "true");
-  const nextClass = nextGroupClass(classes, now);
-  const toggleFocus = () => setFocusCollapsed((collapsed) => { localStorage.setItem("rotina-focus-collapsed", String(!collapsed)); return !collapsed; });
-  useEffect(() => {
-    const start = window.setTimeout(() => setAnimatedTaskPercent(dayPercent), 120);
-    let finish: number | undefined;
-    if (dayPercent === 100 && celebrateRequested) {
-      const celebrate = window.setTimeout(() => setCelebrating(true), 380);
-      const sound = window.setTimeout(playCelebrationSound, 420);
-      const consumed = window.setTimeout(onCelebrated, 450);
-      finish = window.setTimeout(() => setCelebrating(false), 6200);
-      return () => { window.clearTimeout(start); window.clearTimeout(celebrate); window.clearTimeout(sound); window.clearTimeout(consumed); if(finish) window.clearTimeout(finish); };
-    }
-    return () => window.clearTimeout(start);
-  }, [dayPercent, celebrateRequested]);
-  return <>
-    <div className="hero-head compact"><div><p className="eyebrow">{longDate(now).toLocaleUpperCase("pt-BR")}</p><h1>{greeting}, <span className={`person-name ${person==="gileade"?"active-person":""}`}>Gileade</span> e <span className={`person-name ${person==="renata"?"active-person":""}`}>Renata</span> <span>♥</span></h1></div><div className="couple"><span>G</span><span>R</span></div></div>
-    <article className={`compact-focus ${focusCollapsed ? "collapsed" : ""} ${celebrating ? "celebrating" : ""}`}><button className="focus-toggle" onClick={toggleFocus} aria-label={focusCollapsed ? "Expandir foco da semana" : "Minimizar foco da semana"} aria-expanded={!focusCollapsed}><i /></button><div className="focus-copy"><small>Foco da semana</small><b>Disciplina hoje, liberdade amanhã.</b></div><div className="focus-progress-row"><span>Progresso geral do dia</span><strong>{dayPercent}%</strong></div><Progress value={animatedTaskPercent} /></article>{celebrating && <Confetti />}
-    <div className="section-title summary-title"><h2>Resumo do dia</h2></div>
-    <div className="stats-grid home-stats">
-      <button onClick={() => onGo("hoje")} className="stat-card"><small>Afazeres</small><strong>{done}<em>/{total}</em></strong><span>concluídos</span></button>
-      <button onClick={() => onGo("treino")} className="stat-card"><small>Treino</small><strong>{workoutDone ? 1 : 0}<em>/1</em></strong><span>{workoutDone ? "concluído" : "pendente"}</span></button>
-      <button onClick={() => onGo("espiritual")} className="stat-card"><small>Espiritual</small><strong>{spiritualDone ? 1 : 0}<em>/1</em></strong><span>{spiritualDone ? "concluído" : "pendente"}</span></button>
-    </div>
-    <div className="section-title next-title"><h2>Próximo</h2><button onClick={() => { onGo("treino"); setTimeout(() => document.getElementById("aulas-coletivas")?.scrollIntoView(), 80); }}>Ver mais</button></div>
-    <div className="next-grid">
-      <button className="next-mini next-single" onClick={() => { onGo("treino"); setTimeout(() => document.getElementById("aulas-coletivas")?.scrollIntoView(), 80); }}><i className="blue-line"/><b>{nextClass?.name || "Nenhuma aula configurada"}</b><small>{nextClass ? `${nextClass.day} · ${nextClass.time}` : "Configure na tela de treino"}</small></button>
-    </div>
-    <div className="week-card"><div className="section-title"><div><p>NOSSA SEMANA</p><h2>{weekScore >= 70 ? "Vocês estão no ritmo" : "Cada passo conta"}</h2></div><div className="week-score">{weekScore}<small>%</small></div></div>{weekRows.map(([n,v,c]) => <div className="week-row" key={n}><span>{n}</span><Progress value={v} color={c} /><b>{v}%</b></div>)}<div className="highlight">🏋️ <span><b>{workoutDone ? "Treino de hoje concluído" : "O treino de hoje está esperando"}</b><small>{workoutDone ? "Mais um passo construído juntos." : "Comecem quando estiverem prontos."}</small></span></div></div>
-  </>;
-}
-
-function Hoje({ now, tasks, toggle, remove, done, onAdd }: { now: Date; tasks: typeof tasksSeed; toggle: (id: string) => void; remove: (id:string)=>void; done: number; onAdd:()=>void }) {
-  const percent = tasks.length ? Math.round(done/tasks.length*100) : 0;
-  const calendarDays = Array.from({ length: 7 }, (_, index) => { const date = new Date(now); date.setHours(12, 0, 0, 0); date.setDate(date.getDate() + index - 3); return date; });
-  const previousPercent = useRef(percent);
-  const [celebrating,setCelebrating] = useState(false);
-  useEffect(()=>{
-    const crossed = previousPercent.current < 70 && percent >= 70;
-    previousPercent.current = percent;
-    if(crossed){ playCelebrationSound(); setCelebrating(true); const timer=window.setTimeout(()=>setCelebrating(false),6200); return ()=>window.clearTimeout(timer); }
-  },[percent]);
-  return <><div className="today-head"><h1>Hoje</h1><p>{dayAndMonth(now)}, {weekday(now)}</p></div><div className="calendar-strip">{calendarDays.map((date,index) => <button className={index===3?"selected":""} key={date.toISOString()}><small>{new Intl.DateTimeFormat("pt-BR", { weekday: "narrow" }).format(date).toLocaleUpperCase("pt-BR")}</small><b>{date.getDate()}</b>{index===3&&<i/>}</button>)}</div><div className="tasks-focus"><div className="section-title"><div><p>ATIVIDADES DE HOJE</p><h2>Afazeres do dia</h2></div><button onClick={onAdd}>＋ Adicionar</button></div><div className={`daily-progress milestone-progress ${celebrating?"celebrating":""}`}><div><span>Progresso do dia</span><b>{done} de {tasks.length} · {percent}%</b></div><Progress value={percent} color="green" /></div><div className="task-list">{tasks.map(t => <SwipeTask key={t.id} task={t} onToggle={()=>toggle(t.id)} onDelete={()=>remove(t.id)} />)}</div></div>{celebrating&&<Confetti/>}</>;
-}
-
-function SwipeTask({ task, onToggle, onDelete }: { task: typeof tasksSeed[number]; onToggle:()=>void; onDelete:()=>void }) {
-  const start = useRef({ x: 0, y: 0 });
-  const [offset, setOffset] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const moved = useRef(false);
-  const down = (e:React.PointerEvent) => { start.current={x:e.clientX,y:e.clientY}; moved.current=false; setDragging(true); e.currentTarget.setPointerCapture(e.pointerId); };
-  const move = (e:React.PointerEvent) => { if(!dragging)return; const dx=e.clientX-start.current.x; const dy=e.clientY-start.current.y; if(Math.abs(dy)>35){setOffset(0);return;} if(dx<0){setOffset(Math.max(-125,dx)); if(dx<-12)moved.current=true;} };
-  const up = () => { setDragging(false); if(offset<=-105) onDelete(); setOffset(0); };
-  return <div className="swipe-task"><div className="delete-reveal"><span>⌫</span><b>Excluir</b></div><button className={`task ${task.done?"done":""}`} style={{transform:`translateX(${offset}px)`,transition:dragging?"none":"transform .22s ease"}} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onClick={()=>{if(!moved.current)onToggle();}}><span className="check">{task.done&&"✓"}</span><span className="task-copy"><b>{task.title}{task.recurring&&<i className="recurring-badge" title="Tarefa rotineira">↻</i>}</b><small>{task.tag} · <em className={task.level.toLowerCase()}>{task.level}</em> · +{task.coins} ✦</small></span><time>{task.time}</time></button></div>;
-}
-
-function RecurringDeleteModal({ task, onClose, onDeleteToday, onDeleteForever }: { task:typeof tasksSeed[number]; onClose:()=>void; onDeleteToday:()=>void; onDeleteForever:()=>void }) {
-  return <div className="modal"><div className="sheet recurring-delete-sheet"><button className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">ATIVIDADE DE ROTINA</p><h1>Como deseja excluir?</h1><p className="description"><b>{task.title}</b> está configurada para aparecer todos os dias.</p><div className="recurring-delete-actions"><button className="outline-add" onClick={onDeleteToday}><span>Ocultar só hoje</span><small>A atividade volta a aparecer amanhã.</small></button><button className="danger-action" onClick={onDeleteForever}><span>Excluir definitivamente</span><small>Remove esta atividade de todos os dias.</small></button></div><button className="cancel-action" onClick={onClose}>Cancelar</button></div></div>;
-}
-
-function AddTaskModal({ onClose, onAdd }: { onClose:()=>void; onAdd:(task:{title:string;level:string;tag:string;time:string;recurring:boolean})=>void }) {
-  const [title,setTitle]=useState(""); const [level,setLevel]=useState("Fácil"); const [tag,setTag]=useState("Casa"); const [time,setTime]=useState(""); const [recurring,setRecurring]=useState(false);
-  return <div className="modal"><form className="sheet task-form" onSubmit={(e)=>{e.preventDefault();if(title.trim())onAdd({title:title.trim(),level,tag,time,recurring});}}><button type="button" className="sheet-close" onClick={onClose}>×</button><p className="eyebrow">NOVA ATIVIDADE</p><h1>Adicionar afazer</h1><label>Nome da atividade<input required value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex.: Organizar a cozinha" /></label><label>Horário <small>(opcional)</small><input type="time" value={time} onChange={e=>setTime(e.target.value)} /></label><fieldset><legend>Dificuldade</legend><div className="choice-row">{["Fácil","Médio","Difícil"].map(item=><button type="button" key={item} className={level===item?"selected":""} onClick={()=>setLevel(item)}>{item}</button>)}</div></fieldset><fieldset><legend>Categoria</legend><div className="choice-row categories">{["Casa","Juntos","Pessoal","Estudo","Saúde"].map(item=><button type="button" key={item} className={tag===item?"selected":""} onClick={()=>setTag(item)}>{item}</button>)}</div></fieldset><label className="recurring-toggle"><input type="checkbox" checked={recurring} onChange={e=>setRecurring(e.target.checked)} /><span className="toggle-track"><span className="toggle-thumb"/></span><span className="recurring-copy"><b>Repetir todos os dias</b><small>Aparece diariamente. Excluir num dia some só naquele dia.</small></span></label><button className="primary" type="submit">Adicionar atividade</button></form></div>;
 }
 
 function Treino({ now, person, plan, classes, selectedDay, workoutDone, trainedDays, onSelectDay, onDetail, onStart, onEdit, onEditClasses, onMarkDone }: { now:Date; person:Person; plan:WeeklyPlan; classes:GroupClass[]; selectedDay:number; workoutDone:boolean; trainedDays:number[]; onSelectDay:(day:number)=>void; onDetail:(exercise:WorkoutExercise,index:number,total:number)=>void; onStart:(day:number)=>void; onEdit:()=>void; onEditClasses:()=>void; onMarkDone:(day:number)=>void }) {
@@ -496,7 +241,7 @@ function Treino({ now, person, plan, classes, selectedDay, workoutDone, trainedD
   return <>
     <div className="page-head workout-page-head"><p className="eyebrow">{selectedDay === today ? "TREINO DE HOJE" : weekdayLabels[selectedDay].toLocaleUpperCase("pt-BR")}</p><h1>Treino de {person === "gileade" ? "Gileade" : "Renata"}</h1><p>{workoutDone&&selectedDay===today?"Treino concluído. Bom trabalho!":shown.exercises.length ? `Foco em ${shown.muscles}.` : "Dia de recuperação e descanso."}</p></div>
     <div className="workout-week">{weekdayLabels.map((label,day)=>{const trained=trainedDays.includes(day);return <button key={label} className={`${selectedDay===day?"selected":""} ${day===today?"today":""} ${trained?"trained":""}`} onClick={()=>onSelectDay(day)}><small>{label}</small><span>{trained?"✓":plan[day].exercises.length ? plan[day].title.replace("Treino ","") : "—"}</span></button>;})}</div>
-    <article className={`workout-hero compact-workout ${workoutDone && selectedDay===today?"completed-workout":""}`}><div className="workout-art has-image"><img src={`${import.meta.env.BASE_URL}rotina-casal.png`} alt="Casal construindo sua rotina de treino" /><span>{shown.muscles.toLocaleUpperCase("pt-BR")}</span>{workoutDone&&selectedDay===today&&<b className="workout-done-badge">✓ CONCLUÍDO</b>}</div><div className="workout-copy"><p>{shown.title.toLocaleUpperCase("pt-BR")}</p><h2>{shown.muscles}</h2><div className="workout-meta"><span>◉ {shown.exercises.length} exercícios</span><span>◷ {shown.duration} min</span><span>✦ +80</span></div>{shown.exercises.length>0 && selectedDay===today && !workoutDone && <button className="primary" onClick={()=>onStart(selectedDay)}>Iniciar treino</button>}{shown.exercises.length>0 && selectedDay<today && !trainedDays.includes(selectedDay) && <button className="outline-add honor-trigger" onClick={()=>onMarkDone(selectedDay)}>Já treinei, marcar como concluído</button>}</div></article>
+    <article className={`workout-hero compact-workout ${workoutDone && selectedDay===today?"completed-workout":""}`}><div className="workout-art has-image"><img src={`${import.meta.env.BASE_URL}rotina-casal.png`} alt="Casal construindo sua rotina de treino" /><span>{shown.muscles.toLocaleUpperCase("pt-BR")}</span>{workoutDone&&selectedDay===today&&<b className="workout-done-badge">✓ CONCLUÍDO</b>}</div><div className="workout-copy"><p>{shown.title.toLocaleUpperCase("pt-BR")}</p><h2>{shown.muscles}</h2><div className="workout-meta"><span>◉ {shown.exercises.length} exercícios</span><span>◷ {shown.duration} min</span></div>{shown.exercises.length>0 && selectedDay===today && !workoutDone && <button className="primary" onClick={()=>onStart(selectedDay)}>Iniciar treino</button>}{shown.exercises.length>0 && selectedDay<today && !trainedDays.includes(selectedDay) && <button className="outline-add honor-trigger" onClick={()=>onMarkDone(selectedDay)}>Já treinei, marcar como concluído</button>}</div></article>
     {workoutDone&&selectedDay===today&&<article className="next-workout-preview"><small>PRÓXIMO TREINO · {weekdayLabels[nextTrainingDay].toLocaleUpperCase("pt-BR")}</small><div><span><b>{plan[nextTrainingDay].title}</b><em>{plan[nextTrainingDay].muscles}</em></span><strong>{plan[nextTrainingDay].exercises.length} exercícios</strong></div></article>}
     <div className="section-title workout-list-title"><div><p>{selectedDay===today?"PROGRAMAÇÃO DO DIA":weekdayLabels[selectedDay].toLocaleUpperCase("pt-BR")}</p><h2>Exercícios</h2></div><button onClick={onEdit}>Editar</button></div>
     {workoutDone&&selectedDay===today&&<button className="completed-expand" onClick={()=>setExpandedCompleted(value=>!value)}>{expandedCompleted?"Ocultar exercícios":"Ver treino concluído"}<i className={expandedCompleted?"open":""}/></button>}
@@ -506,7 +251,7 @@ function Treino({ now, person, plan, classes, selectedDay, workoutDone, trainedD
 }
 
 function PersonMenu({ person, onSelect, onClose }: { person:Person; onSelect:(person:Person)=>void; onClose:()=>void }) {
-  return <div className="drawer-backdrop" onClick={onClose}><aside className="person-drawer" onClick={event=>event.stopPropagation()}><div className="drawer-head"><div><small>CONFIGURAÇÕES</small><h2>Pessoa ativa</h2></div><button onClick={onClose}>×</button></div><p>Escolha de quem você quer visualizar tarefas, treinos e aulas.</p><div className={`person-switch ${person}`}><button className={person==="gileade"?"active":""} onClick={()=>onSelect("gileade")}><span>G</span>Gileade</button><button className={person==="renata"?"active":""} onClick={()=>onSelect("renata")}><span>R</span>Renata</button><i/></div><div className="shared-note"><span>✦</span><div><b>Saldo compartilhado</b><small>As moedas pertencem ao casal.</small></div></div></aside></div>;
+  return <div className="drawer-backdrop" onClick={onClose}><aside className="person-drawer" onClick={event=>event.stopPropagation()}><div className="drawer-head"><div><small>CONFIGURAÇÕES</small><h2>Pessoa ativa</h2></div><button onClick={onClose}>×</button></div><p>Escolha de quem você quer visualizar o treino e as aulas.</p><div className={`person-switch ${person}`}><button className={person==="gileade"?"active":""} onClick={()=>onSelect("gileade")}><span>G</span>Gileade</button><button className={person==="renata"?"active":""} onClick={()=>onSelect("renata")}><span>R</span>Renata</button><i/></div></aside></div>;
 }
 
 function ExerciseDetail({ target, onClose }: { target:{ exercise:WorkoutExercise; index:number; total:number }; onClose:()=>void }) {
@@ -556,7 +301,7 @@ const exerciseGuides = [
   { names:["stiff"], image:"stiff.jpg", tip:"Pernas quase retas; desça a barra rente às pernas mantendo as costas retas." },
   { names:["abdominal na maquina","abdominal máquina"], image:"abdominal-maquina.jpg", tip:"Flexione o tronco contraindo o abdômen, sem puxar com o pescoço." },
 ];
-const normalizeExerciseName=(value:string)=>value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+const normalizeExerciseName=(value:string)=>value.normalize("NFD").replace(/[̀-ͯ]/g,"").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
 function getExerciseGuide(name:string){const normalized=normalizeExerciseName(name);return exerciseGuides.find(item=>item.names.some(alias=>normalized.includes(alias)));}
 const exerciseImageSrc=(image:string)=>image.startsWith("http")?image:`${import.meta.env.BASE_URL}exercises/${image}`;
 
@@ -629,7 +374,7 @@ function WorkoutHonorModal({ day, onClose, onConfirm }: { day:number; onClose:()
 }
 
 function canonicalClassDay(value: string) {
-  const normalized=value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").replace(/-feira/g,"").trim();
+  const normalized=value.normalize("NFD").replace(/[̀-ͯ]/g,"").toLocaleLowerCase("pt-BR").replace(/-feira/g,"").trim();
   const days:Record<string,string>={domingo:"Domingo",dom:"Domingo",segunda:"Segunda-feira",seg:"Segunda-feira",terca:"Terça-feira",ter:"Terça-feira",quarta:"Quarta-feira",qua:"Quarta-feira",quinta:"Quinta-feira",qui:"Quinta-feira",sexta:"Sexta-feira",sex:"Sexta-feira",sabado:"Sábado",sab:"Sábado"};
   return days[normalized] || null;
 }
@@ -654,45 +399,5 @@ function GroupClassEditor({ person, schedule, onClose, onSave }: { person:Person
   const [prompt,setPrompt]=useState("");
   const [message,setMessage]=useState("");
   const update=(id:string,field:keyof GroupClass,value:string)=>setItems(current=>current.map(item=>item.id===id?{...item,[field]:value}:item));
-  return <div className="modal"><div className="sheet workout-editor class-editor"><button className="sheet-close" onClick={onClose}>×</button><div className="workout-editor-scroll"><p className="eyebrow">AGENDA DE {person === "gileade" ? "GILEADE" : "RENATA"}</p><h1>Editar aulas coletivas</h1><p className="editor-intro">Configure as aulas que aparecerão em “Próximo” e na agenda de treinos.</p><div className="class-editor-list">{items.map(item=><article key={item.id}><select aria-label="Dia da aula" value={item.day} onChange={event=>update(item.id,"day",event.target.value)}>{["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"].map(day=><option key={day}>{day}</option>)}</select><input aria-label="Nome da aula" value={item.name} onChange={event=>update(item.id,"name",event.target.value)}/><input aria-label="Horário da aula" type="time" value={item.time} onChange={event=>update(item.id,"time",event.target.value)}/><button aria-label={`Remover ${item.name}`} onClick={()=>setItems(current=>current.filter(entry=>entry.id!==item.id))}>×</button></article>)}</div><button className="outline-add" onClick={()=>setItems(current=>[...current,{id:`manual-class-${Date.now()}`,day:"Segunda-feira",name:"Nova aula",time:"18:00"}])}>＋ Adicionar aula</button><div className="prompt-import"><p className="eyebrow">IMPORTAR AULAS DA IA</p><p>Cole vários dias e horários. As aulas reconhecidas substituirão esta lista depois que você revisar e salvar.</p><textarea value={prompt} onChange={event=>setPrompt(event.target.value)} placeholder={"Segunda-feira:\n- Muay Thai - 18:30\n- Funcional - 19:30\n\nSábado - Pilates - 09:00"}/><button type="button" onClick={()=>{const parsed=parseGroupClassPrompt(prompt);if(parsed.length){setItems(parsed);setMessage(`${parsed.length} aula(s) interpretada(s). Revise antes de salvar.`);}else setMessage("Não encontrei aulas. Confira o formato do texto.");}}>Organizar aulas</button>{message&&<small className={message.startsWith("Não")?"import-error":""}>{message}</small>}</div></div><button className="primary" onClick={()=>onSave({...schedule,[person]:items})}>Salvar aulas</button></div></div>;
-}
-
-function Espiritual({ reward, checked, setChecked }: { reward:(n:number,s?:string)=>void; checked:boolean; setChecked:React.Dispatch<React.SetStateAction<boolean>> }) { return <><div className="page-head"><p className="eyebrow">VIDA ESPIRITUAL</p><h1>Um tempo com Deus</h1></div><article className="verse"><span>“</span><p>Entregue o seu caminho ao Senhor; confie nele, e ele agirá.</p><small>SALMOS 37:5</small></article><article className={`devotional ${checked?"complete":""}`}><div className="dev-head"><Icon>☼</Icon><div><p>DEVOCIONAL DE HOJE</p><h2>{checked?"Feito juntos":"Já fizeram hoje?"}</h2></div><span>+15 ✦</span></div><button className="primary" onClick={()=>{if(!checked){setChecked(true);reward(15,"Momento espiritual concluído");}}}>{checked?"Concluído ♥":"Marcar como concluído"}</button></article></> }
-
-function Conquistas({ coins, rewards, onRedeemRequest, onEditRewards }: { coins:number; rewards:Reward[]; onRedeemRequest:(reward:Reward)=>void; onEditRewards:()=>void }) { return <><div className="page-head"><p className="eyebrow">NOSSO PROGRESSO</p><h1>Conquistas</h1><p>Celebrem cada passo do caminho.</p></div><article className="balance"><p>SALDO DO CASAL</p><h2><span>✦</span>{coins.toLocaleString("pt-BR")}</h2><small>moedas disponíveis</small></article><div className="section-title"><div><p>BADGES</p><h2>Conquistas recentes</h2></div><button>Ver todas</button></div><div className="badges"><div className="badge unlocked"><span>🔥</span><b>Foco total</b><small>5 dias perfeitos</small></div><div className="badge unlocked"><span>🏋️</span><b>Constância</b><small>10 treinos</small></div><div className="badge"><span>♥</span><b>Sempre juntos</b><small>18/25 atividades</small></div></div><div className="section-title"><div><p>LOJINHA</p><h2>Recompensas</h2></div><button onClick={onEditRewards}>Editar</button></div><div className="rewards">{rewards.length?rewards.map(item=><button key={item.id} onClick={()=>onRedeemRequest(item)}><span>{item.icon}</span><span><b>{item.name}</b><small>Momento para vocês</small></span><em>✦ {item.price.toLocaleString("pt-BR")}</em></button>):<div className="empty-workout">Nenhuma recompensa cadastrada. Toque em Editar para adicionar.</div>}</div></> }
-
-function RewardEditor({ rewards, onClose, onSave }: { rewards:Reward[]; onClose:()=>void; onSave:(next:Array<{icon:string;name:string;price:number}>)=>void }) {
-  const [draft,setDraft]=useState<Array<{icon:string;name:string;price:number}>>(()=>rewards.map(({icon,name,price})=>({icon,name,price})));
-  const update=(index:number,field:"icon"|"name"|"price",value:string|number)=>setDraft(current=>current.map((item,itemIndex)=>itemIndex===index?{...item,[field]:value}:item));
-  const addReward=()=>setDraft(current=>[...current,{icon:"🎁",name:"Nova recompensa",price:100}]);
-  return <div className="modal"><div className="sheet workout-editor reward-editor"><button className="sheet-close" onClick={onClose}>×</button><div className="workout-editor-scroll"><p className="eyebrow">LOJINHA</p><h1>Editar recompensas</h1><div className="editor-exercises">{draft.map((item,index)=><article key={index}><div className="reward-editor-row"><input aria-label="Ícone da recompensa" className="reward-icon-input" value={item.icon} onChange={event=>update(index,"icon",event.target.value)} maxLength={4}/><input aria-label="Nome da recompensa" value={item.name} onChange={event=>update(index,"name",event.target.value)}/></div><label>Preço em moedas<input type="number" min="1" value={item.price} onChange={event=>update(index,"price",Number(event.target.value))}/></label><button className="remove-exercise" aria-label={`Remover ${item.name}`} onClick={()=>setDraft(current=>current.filter((_,itemIndex)=>itemIndex!==index))}>×</button></article>)}</div><button className="outline-add" onClick={addReward}>＋ Adicionar recompensa</button></div><button className="primary" onClick={()=>onSave(draft)}>Salvar recompensas</button></div></div>;
-}
-
-function RewardTicketModal({ reward, coins, onClose, onConfirm }: { reward:Reward; coins:number; onClose:()=>void; onConfirm:()=>void }) {
-  const canAfford = coins >= reward.price;
-  const [dragX, setDragX] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const [torn, setTorn] = useState(false);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const startX = useRef(0);
-  const HANDLE = 46;
-  const down = (event: React.PointerEvent) => { if (torn || !canAfford) return; setDragging(true); startX.current = event.clientX - dragX; event.currentTarget.setPointerCapture(event.pointerId); };
-  const move = (event: React.PointerEvent) => {
-    if (!dragging || torn) return;
-    const track = trackRef.current; if (!track) return;
-    const max = Math.max(1, track.clientWidth - HANDLE);
-    const next = Math.max(0, Math.min(max, event.clientX - startX.current));
-    setDragX(next);
-    if (next >= max * 0.9) { setDragging(false); setTorn(true); onConfirm(); }
-  };
-  const up = () => { setDragging(false); if (!torn) setDragX(0); };
-  return <div className="modal ticket-modal"><div className={`ticket ${torn?"torn":""}`}>
-    <button className="sheet-close" onClick={onClose}>×</button>
-    <div className="ticket-half ticket-top"><span className="ticket-icon">{reward.icon}</span><h1>{reward.name}</h1><p>Momento para vocês</p></div>
-    <div className="ticket-perforation">{Array.from({length:14},(_,i)=><i key={i}/>)}</div>
-    <div className="ticket-half ticket-bottom">
-      <div className="ticket-price"><span>✦</span>{reward.price.toLocaleString("pt-BR")} moedas</div>
-      {canAfford ? <div className="ticket-slider" ref={trackRef}><span className="ticket-slider-label">{torn?"Resgatado! ✓":"Arraste para cortar →"}</span><button type="button" className="ticket-slider-handle" style={{transform:`translateX(${dragX}px)`}} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} disabled={torn}>✂️</button></div> : <p className="ticket-warning">Faltam {(reward.price-coins).toLocaleString("pt-BR")} moedas para essa recompensa</p>}
-    </div>
-  </div></div>;
+  return <div className="modal"><div className="sheet workout-editor class-editor"><button className="sheet-close" onClick={onClose}>×</button><div className="workout-editor-scroll"><p className="eyebrow">AGENDA DE {person === "gileade" ? "GILEADE" : "RENATA"}</p><h1>Editar aulas coletivas</h1><p className="editor-intro">Configure as aulas que aparecerão na agenda de treinos.</p><div className="class-editor-list">{items.map(item=><article key={item.id}><select aria-label="Dia da aula" value={item.day} onChange={event=>update(item.id,"day",event.target.value)}>{["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"].map(day=><option key={day}>{day}</option>)}</select><input aria-label="Nome da aula" value={item.name} onChange={event=>update(item.id,"name",event.target.value)}/><input aria-label="Horário da aula" type="time" value={item.time} onChange={event=>update(item.id,"time",event.target.value)}/><button aria-label={`Remover ${item.name}`} onClick={()=>setItems(current=>current.filter(entry=>entry.id!==item.id))}>×</button></article>)}</div><button className="outline-add" onClick={()=>setItems(current=>[...current,{id:`manual-class-${Date.now()}`,day:"Segunda-feira",name:"Nova aula",time:"18:00"}])}>＋ Adicionar aula</button><div className="prompt-import"><p className="eyebrow">IMPORTAR AULAS DA IA</p><p>Cole vários dias e horários. As aulas reconhecidas substituirão esta lista depois que você revisar e salvar.</p><textarea value={prompt} onChange={event=>setPrompt(event.target.value)} placeholder={"Segunda-feira:\n- Muay Thai - 18:30\n- Funcional - 19:30\n\nSábado - Pilates - 09:00"}/><button type="button" onClick={()=>{const parsed=parseGroupClassPrompt(prompt);if(parsed.length){setItems(parsed);setMessage(`${parsed.length} aula(s) interpretada(s). Revise antes de salvar.`);}else setMessage("Não encontrei aulas. Confira o formato do texto.");}}>Organizar aulas</button>{message&&<small className={message.startsWith("Não")?"import-error":""}>{message}</small>}</div></div><button className="primary" onClick={()=>onSave({...schedule,[person]:items})}>Salvar aulas</button></div></div>;
 }

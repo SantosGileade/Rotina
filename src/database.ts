@@ -1,8 +1,8 @@
 import { supabase } from "./supabase";
 
 export type DbPerson = "gileade" | "renata";
-const localDate=()=>{const now=new Date();return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;};
 const startOfWeek=()=>{const now=new Date();now.setDate(now.getDate()-now.getDay());return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;};
+const isRealId=(id:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
 export async function currentHousehold() {
   const { data, error } = await supabase.from("household_members").select("household_id").limit(1).maybeSingle();
@@ -17,41 +17,37 @@ export async function pairHousehold(code:string) {
 }
 
 export async function loadRotina(householdId:string) {
-  const today=localDate();
-  const {error:rolloverError}=await supabase.rpc("rollover_incomplete_tasks");
-  if(rolloverError)throw rolloverError;
-  const [tasks,completions,exclusions,days,exercises,classes,sessions,balance,rewards]=await Promise.all([
-    supabase.from("tasks").select("*").eq("household_id",householdId).or(`task_date.eq.${today},recurring.eq.true`).order("created_at"),
-    supabase.from("daily_task_completions").select("task_id,person,completed_at").eq("completed_date",today),
-    supabase.from("task_exclusions").select("task_id").eq("excluded_date",today),
+  const [days,exercises,classes,sessions]=await Promise.all([
     supabase.from("workout_days").select("*").eq("household_id",householdId),
     supabase.from("workout_exercises").select("*").order("position"),
     supabase.from("group_classes").select("*").eq("household_id",householdId).order("day_of_week").order("position"),
     supabase.from("workout_sessions").select("person,completion_date").eq("household_id",householdId).gte("completion_date",startOfWeek()),
-    supabase.from("household_balances").select("balance").eq("household_id",householdId).maybeSingle(),
-    supabase.from("rewards").select("*").eq("household_id",householdId).order("price"),
   ]);
-  const failed=[tasks,completions,exclusions,days,exercises,classes,sessions,balance,rewards].find(result=>result.error);
+  const failed=[days,exercises,classes,sessions].find(result=>result.error);
   if(failed?.error)throw failed.error;
-  return {tasks:tasks.data||[],completions:completions.data||[],exclusions:exclusions.data||[],days:days.data||[],exercises:exercises.data||[],classes:classes.data||[],sessions:sessions.data||[],balance:Number(balance.data?.balance||0),rewards:rewards.data||[]};
+  return {days:days.data||[],exercises:exercises.data||[],classes:classes.data||[],sessions:sessions.data||[]};
 }
 
-export async function insertTask(householdId:string,userId:string,task:{title:string;category:string;difficulty:"easy"|"medium"|"hard";coin_reward:number;assignment:"gileade"|"renata"|"both";task_time:string|null;recurring:boolean}) {
-  const {data,error}=await supabase.from("tasks").insert({...task,task_date:localDate(),household_id:householdId,created_by:userId}).select().single();
-  if(error)throw error; return data;
-}
-
-export async function removeTaskRecord(id:string){const {error}=await supabase.from("tasks").delete().eq("id",id);if(error)throw error;}
-export async function excludeTaskForToday(id:string){const {error}=await supabase.from("task_exclusions").insert({task_id:id,excluded_date:localDate()});if(error)throw error;}
-export async function setTaskDone(id:string,person:DbPerson,complete:boolean){const {error}=await supabase.rpc("set_task_completion",{target_task:id,target_person:person,should_complete:complete});if(error)throw error;}
-
-export async function saveWorkoutPlan(householdId:string,person:DbPerson,plan:Record<number,{title:string;muscles:string;duration:number;exercises:Array<{name:string;sets:number;reps:string;muscle:string;weight:number}>}>){
+// Preserva o id dos exercicios existentes (upsert) em vez de apagar e recriar tudo a cada
+// salvamento. Recriar tudo gerava ids novos para exercicios de dias que nem foram tocados,
+// o que fazia ajustes de carga feitos logo antes (ainda com o id antigo em cache local)
+// falharem silenciosamente — a carga nunca chegava a salvar de verdade no banco.
+export async function saveWorkoutPlan(householdId:string,person:DbPerson,plan:Record<number,{title:string;muscles:string;duration:number;exercises:Array<{id:string;name:string;sets:number;reps:string;muscle:string;weight:number}>}>){
   for(const [dayKey,item] of Object.entries(plan)){
     const day=Number(dayKey);
     const {data:dayRow,error:dayError}=await supabase.from("workout_days").upsert({household_id:householdId,person,day_of_week:day,title:item.title,muscles:item.muscles,duration_minutes:item.duration,updated_at:new Date().toISOString()},{onConflict:"household_id,person,day_of_week"}).select("id").single();
     if(dayError)throw dayError;
-    const {error:deleteError}=await supabase.from("workout_exercises").delete().eq("workout_day_id",dayRow.id);if(deleteError)throw deleteError;
-    if(item.exercises.length){const {error}=await supabase.from("workout_exercises").insert(item.exercises.map((exercise,index)=>({workout_day_id:dayRow.id,position:index,name:exercise.name,sets:exercise.sets,reps:exercise.reps,muscle:exercise.muscle,weight:exercise.weight})));if(error)throw error;}
+    const {data:existingRows,error:existingError}=await supabase.from("workout_exercises").select("id").eq("workout_day_id",dayRow.id);
+    if(existingError)throw existingError;
+    const existingIds=new Set((existingRows||[]).map(row=>row.id as string));
+    const keepIds=new Set(item.exercises.filter(exercise=>isRealId(exercise.id)).map(exercise=>exercise.id));
+    const toDelete=[...existingIds].filter(id=>!keepIds.has(id));
+    if(toDelete.length){const {error}=await supabase.from("workout_exercises").delete().in("id",toDelete);if(error)throw error;}
+    for(const [index,exercise] of item.exercises.entries()){
+      const row={workout_day_id:dayRow.id,position:index,name:exercise.name,sets:exercise.sets,reps:exercise.reps,muscle:exercise.muscle,weight:exercise.weight,updated_at:new Date().toISOString()};
+      if(isRealId(exercise.id)&&existingIds.has(exercise.id)){const {error}=await supabase.from("workout_exercises").update(row).eq("id",exercise.id);if(error)throw error;}
+      else{const {error}=await supabase.from("workout_exercises").insert(row);if(error)throw error;}
+    }
   }
 }
 
@@ -62,22 +58,10 @@ export async function saveClasses(householdId:string,person:DbPerson,items:Array
 }
 
 export async function updateExerciseWeight(exerciseId:string,weight:number){
-  const {error}=await supabase.from("workout_exercises").update({weight,updated_at:new Date().toISOString()}).eq("id",exerciseId);
+  const {data,error}=await supabase.from("workout_exercises").update({weight,updated_at:new Date().toISOString()}).eq("id",exerciseId).select("id");
   if(error)throw error;
+  if(!data||data.length===0)throw new Error("Não foi possível salvar a carga: exercício desatualizado. Recarregue a página e tente novamente.");
 }
-
-export async function seedDefaultRewards(householdId:string,userId:string,rewards:Array<{icon:string;name:string;price:number}>){
-  const {error}=await supabase.from("rewards").upsert(rewards.map(item=>({...item,household_id:householdId,created_by:userId})),{onConflict:"household_id,name",ignoreDuplicates:true});
-  if(error)throw error;
-}
-
-export async function saveRewards(householdId:string,userId:string,rewards:Array<{icon:string;name:string;price:number}>){
-  const {error:deleteError}=await supabase.from("rewards").delete().eq("household_id",householdId);
-  if(deleteError)throw deleteError;
-  if(rewards.length){const {error}=await supabase.from("rewards").insert(rewards.map(item=>({...item,household_id:householdId,created_by:userId})));if(error)throw error;}
-}
-
-export async function redeemReward(id:string){const {error}=await supabase.rpc("redeem_reward",{target_reward:id});if(error)throw error;}
 
 export async function finishWorkout(dayId:string,person:DbPerson){const {data,error}=await supabase.rpc("finish_workout",{target_workout_day:dayId,target_person:person});if(error)throw error;return Boolean(data);}
 export async function finishWorkoutForDate(dayId:string,person:DbPerson,date:string){const {data,error}=await supabase.rpc("finish_workout_for_date",{target_workout_day:dayId,target_person:person,target_date:date});if(error)throw error;return Boolean(data);}
