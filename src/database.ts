@@ -17,15 +17,23 @@ export async function pairHousehold(code:string) {
 }
 
 export async function loadRotina(householdId:string) {
-  const [days,exercises,classes,sessions]=await Promise.all([
+  const weekStart=startOfWeek();
+  const [days,exercises,classes,sessions,swaps]=await Promise.all([
     supabase.from("workout_days").select("*").eq("household_id",householdId),
     supabase.from("workout_exercises").select("*").order("position"),
     supabase.from("group_classes").select("*").eq("household_id",householdId).order("day_of_week").order("position"),
-    supabase.from("workout_sessions").select("person,completion_date").eq("household_id",householdId).gte("completion_date",startOfWeek()),
+    supabase.from("workout_sessions").select("person,completion_date").eq("household_id",householdId).gte("completion_date",weekStart),
+    supabase.from("workout_day_swaps").select("person,day_of_week,source_day").eq("household_id",householdId).eq("week_start",weekStart),
   ]);
   const failed=[days,exercises,classes,sessions].find(result=>result.error);
   if(failed?.error)throw failed.error;
-  return {days:days.data||[],exercises:exercises.data||[],classes:classes.data||[],sessions:sessions.data||[]};
+  return {days:days.data||[],exercises:exercises.data||[],classes:classes.data||[],sessions:sessions.data||[],swaps:swaps.error?[]:swaps.data||[]};
+}
+
+export async function saveDaySwaps(householdId:string,person:DbPerson,weekStart:string,entries:Array<{day:number;source:number}>){
+  const {error:deleteError}=await supabase.from("workout_day_swaps").delete().eq("household_id",householdId).eq("person",person).eq("week_start",weekStart);
+  if(deleteError)throw deleteError;
+  if(entries.length){const {error}=await supabase.from("workout_day_swaps").insert(entries.map(entry=>({household_id:householdId,person,week_start:weekStart,day_of_week:entry.day,source_day:entry.source})));if(error)throw error;}
 }
 
 // Preserva o id dos exercicios existentes (upsert) em vez de apagar e recriar tudo a cada

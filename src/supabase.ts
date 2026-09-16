@@ -12,7 +12,7 @@ export const supabase = createClient(url || "https://invalid.supabase.co", publi
 export async function ensureAnonymousSession() {
   const { data } = await supabase.auth.getSession();
   if (data.session) return data.session.user;
-  const result = await supabase.auth.signInAnonymously({ options: { data: { display_name: "Rotina" } } });
+  const result = await supabase.auth.signInAnonymously({ options: { data: { display_name: "Gym" } } });
   if (result.error) throw result.error;
   if (!result.data.user) throw new Error("Não foi possível iniciar a sessão do aparelho.");
   return result.data.user;

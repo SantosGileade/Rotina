@@ -364,3 +364,26 @@ img { max-width:100%; }
 .gate-icon { width:48px; height:48px; display:grid; place-items:center; border-radius:50%; background:#3b2028; color:#f28b99; font-size:24px; font-weight:800; }
 .database-loader { width:38px; height:38px; border:3px solid #ffffff14; border-top-color:#9a72ef; border-radius:50%; animation:databaseSpin .8s linear infinite; }
 @keyframes databaseSpin { to { transform:rotate(360deg); } }
+
+/* Troca de dias de treino (somente na semana atual): pressione e segure um dia para
+   entrar no modo de troca (ícones tremem, como no iOS), depois toque em outro dia. */
+@keyframes swapJiggle { 0% { transform:rotate(-1.4deg); } 100% { transform:rotate(1.4deg); } }
+.workout-week button.swap-jiggle { animation:swapJiggle .15s ease-in-out infinite alternate; }
+.workout-week button.swap-jiggle:nth-child(3n) { animation-delay:.05s; }
+.workout-week button.swap-jiggle:nth-child(3n+1) { animation-delay:.1s; }
+.workout-week button.swap-source { border-color:#f0c55f; box-shadow:0 0 0 2px #f0c55f66; }
+.workout-week button.swap-flash { animation:swapFlash .45s ease; }
+@keyframes swapFlash { 0% { transform:scale(1); } 45% { transform:scale(1.14); box-shadow:0 0 0 3px #8058db88; } 100% { transform:scale(1); } }
+@media (prefers-reduced-motion: reduce) { .workout-week button.swap-jiggle, .workout-week button.swap-flash { animation:none; } }
+
+.workout-actions { display:flex; gap:8px; margin-top:2px; }
+.workout-actions .primary, .workout-actions .outline-add { flex:1; margin:0; }
+.swap-note { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:-2px 0 12px; padding:9px 12px; border-radius:12px; background:#3a2f1533; border:1px solid #6b551f55; color:#f0c55f; font-size:11px; line-height:1.4; }
+.swap-undo { flex:0 0 auto; border:0; background:transparent; color:#f0c55f; font-size:10px; font-weight:700; text-decoration:underline; padding:2px; }
+.toast.wide { white-space:normal; max-width:82%; text-align:center; line-height:1.4; }
+
+/* Aba "Dieta" (placeholder) */
+.coming-soon { min-height:55vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:14px; padding:40px 10px; }
+.coming-soon .icon-badge { width:64px; height:64px; border-radius:20px; background:linear-gradient(135deg,#a078f4,#6b42d0); display:grid; place-items:center; font-size:28px; box-shadow:0 16px 42px #7046cb55; }
+.coming-soon h1 { font-size:21px; margin:0; }
+.coming-soon p { color:#9196a1; font-size:12px; line-height:1.6; max-width:280px; margin:0; }

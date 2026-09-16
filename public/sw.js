@@ -1,4 +1,4 @@
-const CACHE = "rotina-v2";
+const CACHE = "gym-v1";
 const APP_SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png", "./favicon.ico"];
 
 self.addEventListener("install", (event) => {
