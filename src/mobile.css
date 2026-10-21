@@ -469,3 +469,20 @@ img { max-width:100%; }
 .diet-toggle { width:100%; margin-top:14px; padding:12px; border:1px solid #30343e; background:#171a21; border-radius:13px; font-size:11px; color:#aeb2bd; }
 .diet-toggle.on { border-color:#6b5120; background:#2a2312; color:#f0c55f; }
 .workout-editor > .primary:disabled { opacity:.45; }
+
+/* Sem rolagem lateral em nenhuma tela (parece site, nao app). */
+html,body,#root { overflow-x:hidden; overscroll-behavior-x:none; }
+.modal,.sheet,.workout-editor-scroll { overflow-x:hidden; max-width:100%; overscroll-behavior-x:none; touch-action:pan-y; }
+.sheet *,.workout-editor-scroll * { min-width:0; }
+.sheet input,.sheet select,.sheet textarea { max-width:100%; box-sizing:border-box; }
+.sheet input[type="date"],.sheet input[type="time"] { -webkit-appearance:none; appearance:none; display:block; width:100%; min-width:0; min-height:44px; text-align:left; line-height:1.2; }
+.sheet input[type="date"]::-webkit-date-and-time-value,.sheet input[type="time"]::-webkit-date-and-time-value { text-align:left; min-width:0; }
+.diet-when { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+.diet-items article { grid-template-columns:minmax(0,1fr) 92px 28px; }
+.diet-items article b,.diet-list-main b,.diet-saved-head b { overflow-wrap:anywhere; }
+.diet-log-main small,.diet-items article small,.diet-saved-head small,.diet-list-main small { overflow-wrap:anywhere; }
+.diet-editor-total { flex-wrap:wrap; }
+.diet-macros { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.diet-macros b { overflow:hidden; text-overflow:ellipsis; }
+.exercise-order>div { flex-wrap:wrap; max-height:122px; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; }
+.exercise-order button { max-width:100%; }
