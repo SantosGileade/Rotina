@@ -486,3 +486,7 @@ html,body,#root { overflow-x:hidden; overscroll-behavior-x:none; }
 .diet-macros b { overflow:hidden; text-overflow:ellipsis; }
 .exercise-order>div { flex-wrap:wrap; max-height:122px; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; }
 .exercise-order button { max-width:100%; }
+
+/* Rolagem fica contida no formulario; nunca vaza para a pagina de fundo. */
+.modal { overscroll-behavior:contain; }
+.sheet,.workout-editor-scroll { overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }

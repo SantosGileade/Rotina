@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ensureAnonymousSession, supabaseConfigured } from "./supabase";
 import Dieta from "./diet/Dieta";
+import { useScrollLock } from "./scrollLock";
 import { currentHousehold, finishWorkout, finishWorkoutForDate, loadRotina, pairHousehold, saveClasses, saveDaySwaps, saveWorkoutPlan, updateExerciseWeight } from "./database";
 
 type Person = "gileade" | "renata";
@@ -281,6 +282,7 @@ export default function Home() {
   };
 
   const overlayOpen = detailExercise!==null||editingWorkout!==null||editingClasses||honorDay!==null||menuOpen;
+  useScrollLock(overlayOpen);
 
   const startEdgeSwipe = (event: React.PointerEvent) => {
     const canGoBack=detailExercise!==null||workout||editingWorkout!==null||editingClasses||honorDay!==null||menuOpen;

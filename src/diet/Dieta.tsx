@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { DbPerson } from "../database";
+import { useScrollLock } from "../scrollLock";
 import { addFavorite, createFood, createLog, deleteFavorite, deleteFood, deleteLog, deleteSavedMeal, isMissingDietSchema, loadFavorites, loadGoals, loadLogs, loadSavedMeals, saveGoals, saveMeal, searchFoods, updateFood, updateLog } from "./dietApi";
 import { type Favorite, type Food, type Goals, type MealCategory, type MealItem, type MealLog, type SavedMeal, categories, categoryLabel, fmt, fmtMacro, guessCategory, itemFromFood, itemTotals, localDateKey, localTimeKey, mealTotals, newRequestId, unitText, parseDateKey, shiftDateKey, sumTotals } from "./nutrition";
 
@@ -14,6 +15,7 @@ const num = (value: string) => { const parsed = Number(value.replace(",", "."));
 const pct = (value: number, goal: number | null) => (goal && goal > 0 ? Math.min(100, (value / goal) * 100) : 0);
 
 function Sheet({ title, eyebrow, onClose, footer, children }: { title: string; eyebrow?: string; onClose: () => void; footer?: ReactNode; children: ReactNode }) {
+  useScrollLock(true);
   return createPortal(
     <div className="modal"><div className="sheet workout-editor diet-sheet"><button className="sheet-close" onClick={onClose} aria-label="Fechar">×</button>
       <div className="workout-editor-scroll">{eyebrow && <p className="eyebrow">{eyebrow}</p>}<h1>{title}</h1>{children}</div>{footer}</div></div>,
