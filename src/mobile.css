@@ -387,3 +387,85 @@ img { max-width:100%; }
 .coming-soon .icon-badge { width:64px; height:64px; border-radius:20px; background:linear-gradient(135deg,#a078f4,#6b42d0); display:grid; place-items:center; font-size:28px; box-shadow:0 16px 42px #7046cb55; }
 .coming-soon h1 { font-size:21px; margin:0; }
 .coming-soon p { color:#9196a1; font-size:12px; line-height:1.6; max-width:280px; margin:0; }
+
+/* Dieta */
+.diet-date { display:grid; grid-template-columns:42px 1fr 42px; gap:8px; margin:0 0 12px; }
+.diet-date>button { height:42px; border:1px solid #272b34; background:#151820; border-radius:13px; font-size:20px; color:#c4a9ff; }
+.diet-date>button:disabled { opacity:.35; }
+.diet-date label { position:relative; display:grid; place-items:center; height:42px; border:1px solid #272b34; background:#151820; border-radius:13px; font-size:13px; font-weight:700; text-transform:capitalize; }
+.diet-date label input { position:absolute; inset:0; width:100%; height:100%; opacity:0; }
+.diet-summary { border:1px solid #292c36; background:linear-gradient(145deg,#1a1d26,#13151c); border-radius:20px; padding:16px; }
+.diet-kcal { display:flex; justify-content:space-between; align-items:flex-end; gap:10px; margin-bottom:10px; }
+.diet-kcal small { display:block; color:#a383ee; font-size:9px; letter-spacing:1.2px; margin-bottom:4px; }
+.diet-kcal b { font-size:26px; letter-spacing:-.6px; }
+.diet-kcal em { font-style:normal; font-size:12px; font-weight:500; color:#8b909b; letter-spacing:0; }
+.diet-kcal>span { font-size:11px; color:#72dda3; padding-bottom:4px; }
+.diet-kcal>span.over { color:#f2a84b; }
+.diet-macros { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:14px; }
+.diet-macros small { display:block; font-size:9px; color:#8b909b; margin-bottom:3px; }
+.diet-macros b { display:block; font-size:12px; margin-bottom:6px; white-space:nowrap; }
+.diet-fiber { margin:10px 0 0; font-size:10px; color:#8b909b; }
+.diet-link { display:block; margin:12px 0 0 auto; border:0; background:none; color:#a78bfa; font-size:11px; padding:2px; }
+.diet-actions { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:12px; }
+.diet-actions button { display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 4px; border:1px solid #2a2e38; background:#151820; border-radius:14px; font-size:10px; font-weight:600; color:#c9cbd3; text-align:center; }
+.diet-actions button span { font-size:17px; color:#a78bfa; }
+.diet-category { margin-bottom:10px; }
+.diet-category>header { display:flex; align-items:center; gap:8px; padding:4px 2px 6px; }
+.diet-category>header b { font-size:12px; color:#b8bbc3; flex:1; }
+.diet-category>header span { font-size:11px; color:#8b909b; }
+.diet-category>header button { width:28px; height:28px; border:1px solid #30343e; border-radius:9px; background:#1b1e26; color:#a78bfa; font-size:17px; line-height:1; }
+.diet-log { border:1px solid #252932; background:#151820; border-radius:14px; margin-bottom:6px; overflow:hidden; }
+.diet-log-main { width:100%; display:flex; justify-content:space-between; align-items:center; gap:10px; padding:12px; border:0; background:none; text-align:left; }
+.diet-log-main span { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.diet-log-main b { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.diet-log-main small { font-size:9px; color:#8b909b; }
+.diet-log-main em { font-style:normal; font-size:12px; font-weight:700; white-space:nowrap; color:#c7afff; }
+.diet-log-detail { border-top:1px solid #232730; padding:6px 12px 12px; }
+.diet-log-detail p { display:flex; justify-content:space-between; gap:10px; margin:7px 0; font-size:11px; color:#aeb2bd; }
+.diet-log-detail p b { font-weight:500; color:#8b909b; white-space:nowrap; }
+.diet-log-actions { display:flex; gap:7px; margin-top:10px; }
+.diet-log-actions button { flex:1; border:1px solid #30343e; background:#1b1e26; border-radius:10px; padding:9px 4px; font-size:10px; color:#c9cbd3; }
+.diet-log-actions button.danger { border-color:#5b2d36; color:#ef8793; background:#241519; }
+.diet-week { display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+.diet-week button { border:1px solid #242832; background:#14171d; border-radius:11px; padding:8px 1px; display:flex; flex-direction:column; align-items:center; gap:4px; color:#777d88; }
+.diet-week button small { font-size:8px; text-transform:capitalize; }
+.diet-week button b { font-size:10px; font-weight:600; }
+.diet-week button.selected { border-color:#7954cf; background:#211a30; color:#fff; }
+.diet-note { margin:12px 2px 0; font-size:10px; line-height:1.5; color:#777c87; }
+.diet-sheet select,.diet-sheet .diet-search { width:100%; border:1px solid #2b2f39; border-radius:12px; background:#191c23; color:#f5f5f7; padding:12px; font:inherit; font-size:12px; outline:none; }
+.diet-sheet .diet-search { margin-top:14px; font-size:16px; }
+.diet-sheet input[type="number"],.diet-sheet input[type="date"],.diet-sheet input[type="time"] { font-size:16px; }
+.diet-when { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.diet-items { display:flex; flex-direction:column; gap:8px; margin-top:16px; }
+.diet-items article { display:grid; grid-template-columns:1fr 92px 28px; gap:8px; align-items:center; border:1px solid #272b34; background:#151820; border-radius:14px; padding:10px; }
+.diet-items article>span { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.diet-items article b { font-size:12px; }
+.diet-items article small { font-size:9px; color:#8b909b; }
+.diet-sheet .diet-items label.grams { position:relative; margin:0; }
+.diet-sheet .diet-items label.grams input { padding:9px 22px 9px 9px; text-align:right; }
+.diet-items label.grams i { position:absolute; right:9px; top:50%; transform:translateY(-50%); font-style:normal; font-size:10px; color:#8b909b; }
+.diet-x { width:28px; height:28px; border:0; border-radius:9px; background:#3a2028; color:#ef8793; font-size:17px; line-height:1; flex:0 0 auto; }
+.diet-x.edit { background:#2a2540; color:#b9a2f5; font-size:14px; }
+.diet-editor-total { display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-top:16px; padding:13px 14px; border:1px solid #3a2f5a; background:#1b1729; border-radius:14px; }
+.diet-editor-total b { font-size:18px; }
+.diet-editor-total span { font-size:10px; color:#a6a0b8; }
+.diet-list { display:flex; flex-direction:column; gap:7px; margin-top:14px; }
+.diet-list>article { display:flex; align-items:center; gap:6px; }
+.diet-list-main { flex:1; min-width:0; display:flex; justify-content:space-between; align-items:center; gap:10px; border:1px solid #252932; background:#151820; border-radius:13px; padding:11px 12px; text-align:left; }
+.diet-list-main span { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.diet-list-main b { font-size:12px; }
+.diet-list-main small { font-size:9px; color:#8b909b; }
+.diet-list-main em { font-style:normal; font-size:10px; color:#c7afff; white-space:nowrap; }
+.diet-list>article.saved { display:block; border:1px solid #252932; background:#151820; border-radius:14px; padding:12px; }
+.diet-list>article.saved>p { margin:8px 0 0; font-size:10px; line-height:1.5; color:#8b909b; }
+.diet-saved-head { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.diet-saved-head span { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.diet-saved-head b { font-size:13px; }
+.diet-saved-head small { font-size:9px; color:#8b909b; }
+.diet-add { flex:0 0 auto; border:0; border-radius:11px; background:linear-gradient(135deg,#9167ed,#7146da); padding:10px 14px; font-size:11px; font-weight:700; }
+.diet-add:disabled { opacity:.5; }
+.diet-chips { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
+.diet-chips button { border:1px solid #30343e; background:#1b1e26; border-radius:10px; padding:8px 10px; font-size:10px; color:#c9cbd3; }
+.diet-toggle { width:100%; margin-top:14px; padding:12px; border:1px solid #30343e; background:#171a21; border-radius:13px; font-size:11px; color:#aeb2bd; }
+.diet-toggle.on { border-color:#6b5120; background:#2a2312; color:#f0c55f; }
+.workout-editor > .primary:disabled { opacity:.45; }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ensureAnonymousSession, supabaseConfigured } from "./supabase";
+import Dieta from "./diet/Dieta";
 import { currentHousehold, finishWorkout, finishWorkoutForDate, loadRotina, pairHousehold, saveClasses, saveDaySwaps, saveWorkoutPlan, updateExerciseWeight } from "./database";
 
 type Person = "gileade" | "renata";
@@ -307,10 +308,10 @@ export default function Home() {
         {workout && <button className="workout-exit-top" onClick={()=>setWorkout(false)}>‹ Sair</button>}
       </header>
 
-      {!overlayOpen && (swipeDragging||swipeOffset>0) && workout && <section className="content underlay-screen" aria-hidden="true">{activeTab==="treino"?treinoScreen:<Dieta/>}</section>}
+      {!overlayOpen && (swipeDragging||swipeOffset>0) && workout && <section className="content underlay-screen" aria-hidden="true">{activeTab==="treino"?treinoScreen:<Dieta householdId={householdId} person={person} notify={notify} showError={showDatabaseError}/>}</section>}
       <section className="content">
         {!workout && activeTab==="treino" && treinoScreen}
-        {!workout && activeTab==="dieta" && <Dieta/>}
+        {!workout && activeTab==="dieta" && <Dieta householdId={householdId} person={person} notify={notify} showError={showDatabaseError}/>}
         {workout && <WorkoutMode plan={weeklyPlan[effectiveSource(workoutDay)]} preview={previewMode} activeExercise={activeExercise} completed={completedExercises} series={series} rest={rest} ready={exerciseReady} onSeries={concludeSeries} onRestDone={()=>setRest(0)} onExitPreview={()=>setWorkout(false)} onChoose={(index) => { const source=effectiveSource(workoutDay); const exercises=weeklyPlan[source].exercises; const current=exercises[activeExercise]; setExerciseProgress(progress=>({...progress,[current.id]:{series,ready:exerciseReady}})); const target=exerciseProgress[exercises[index].id]; setActiveExercise(index); setSeries(target?.series||1); setRest(0); setExerciseReady(target?.ready||false); }} onWeight={changeWeight} />}
       </section>
 
@@ -330,16 +331,6 @@ export default function Home() {
       </div>
       {toast && <div className={`toast ${!toast.startsWith("Erro") ? "success" : ""} ${toast.length>42?"wide":""}`}><span>✦</span>{toast}</div>}
     </main>
-  );
-}
-
-function Dieta() {
-  return (
-    <section className="coming-soon">
-      <span className="icon-badge">🥗</span>
-      <h1>Dieta em breve</h1>
-      <p>Essa área ainda está em desenvolvimento. No futuro, aqui você vai acompanhar sua dieta junto com os treinos.</p>
-    </section>
   );
 }
 
